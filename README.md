@@ -35,7 +35,7 @@ Abra **Criar → Authentication**, clique em **Vamos começar** e ative o proved
 | Financeiro | `financeiro@indicadores.senge.org.br` | Arrecadação, Exclusões PSAT e Atendimento RD |
 | Administrador | `admin@indicadores.senge.org.br` | Todas as áreas |
 
-Esses endereços servem apenas como nome de usuário e não precisam existir como caixas de e-mail, já que o painel nunca envia mensagens para eles. Quem edita não precisa conhecê-los: basta abrir a área, clicar na engrenagem e digitar a senha correspondente, exatamente como antes. Para trocar a senha de uma área, use o menu **⋮** ao lado do usuário, na própria aba **Usuários**.
+Esses endereços servem apenas como nome de usuário e não precisam existir como caixas de e-mail, já que o painel nunca envia mensagens para eles. No painel, ninguém digita esses endereços: a tela de entrada pede apenas **Usuário** e **Senha**, e o usuário é a parte antes do @ (por exemplo, `rh`, `financeiro` ou `admin`), sem diferença entre maiúsculas e minúsculas e aceitando acentos. Para trocar a senha de uma área, use o menu **⋮** ao lado do usuário, na própria aba **Usuários**.
 
 Recomenda-se também acessar **Authentication → Configurações → Ações do usuário** e desmarcar a opção **Ativar criação (inscrição)**. Essa medida impede que terceiros criem contas por conta própria, de modo que apenas os usuários cadastrados por você existam no projeto.
 
@@ -53,7 +53,7 @@ Como esse envio substitui o conteúdo da nuvem, ele deve ser feito somente uma v
 
 ## Como editar os indicadores
 
-Para editar, abra o módulo desejado, clique na engrenagem no cabeçalho e digite a senha da área (ou a do administrador). Após o primeiro login, o navegador mantém a sessão ativa, e a engrenagem passa a abrir o formulário diretamente naquela área; ao abrir outra área, a senha correspondente é solicitada novamente. Para encerrar a sessão, use o botão de saída ao lado da engrenagem.
+Para editar, abra o módulo desejado, clique na engrenagem no cabeçalho e informe o usuário e a senha da área (ou os do administrador). Após o primeiro login, o navegador mantém a sessão ativa, e a engrenagem passa a abrir o formulário diretamente naquela área; ao abrir outra área, o usuário e a senha correspondentes são solicitados novamente. Para encerrar a sessão, use o botão de saída ao lado da engrenagem.
 
 Cada formulário grava apenas a parte do painel correspondente (por exemplo, somente os dados de RH), o que evita que duas pessoas editando áreas diferentes ao mesmo tempo apaguem as alterações uma da outra. Ainda assim, se duas pessoas editarem o **mesmo** indicador simultaneamente, prevalece a última gravação.
 

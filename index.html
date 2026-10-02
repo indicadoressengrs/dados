@@ -861,6 +861,7 @@ body {
     <div class="modal-title"><i class="ti ti-lock"></i> Acesso restrito</div>
     <div class="modal-sub" id="modal-sub">Insira a senha para editar os dados desta seção.</div>
     <div class="modal-area" id="modal-area-label"></div>
+    <input class="modal-input" type="text" id="modal-user" placeholder="Usuário" autocomplete="username" autocapitalize="none" style="display:none;" onkeydown="if(event.key==='Enter')document.getElementById('modal-pwd').focus()">
     <input class="modal-input" type="password" id="modal-pwd" placeholder="Senha" onkeydown="if(event.key==='Enter')confirmarSenha()">
     <div class="modal-err" id="modal-err"></div>
     <div class="modal-btns">
@@ -1594,6 +1595,11 @@ const CHAVES_LOCAIS={dados:'sengers_v2',atend:'sengers_atend_v1',fin:'sengers_fi
 // O usuário "admin" pode editar todas as áreas.
 const DOMINIO_USUARIOS='indicadores.senge.org.br';
 function emailDaArea(area){return area+'@'+DOMINIO_USUARIOS;}
+// Converte o nome digitado (ex.: "RH", "Qualificação") no identificador interno do Firebase
+function emailDoUsuario(nome){
+  const n=nome.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+  return n.includes('@')?n:emailDaArea(n);
+}
 function usuarioPodeEditar(area){
   const u=window.Nuvem&&window.Nuvem.usuario();
   return !!u&&(u.email===emailDaArea(area)||u.email===emailDaArea('admin'));
@@ -1611,7 +1617,7 @@ function salvarDocumento(tipo,obj,campo){
 }
 function erroAoSalvarNuvem(e){
   const msg=e&&e.code==='permission-denied'
-    ?'Este usuário não tem permissão para editar esta área. Saia da conta e entre com a senha da área correta.'
+    ?'Este usuário não tem permissão para editar esta área. Saia da conta e entre com o usuário da área correta.'
     :'Não foi possível salvar na nuvem: '+((e&&e.message)||e);
   alert(msg);
 }
@@ -2248,12 +2254,15 @@ document.getElementById('gear-btn').addEventListener('click',()=>{
   // No modo nuvem, quem já está logado abre o painel de edição diretamente
   // No modo nuvem, quem já entrou com o usuário desta área (ou o admin) abre o painel diretamente
   if(MODO_NUVEM && usuarioPodeEditar(pendingArea)){abrirPainelEdicao();return;}
+  document.getElementById('modal-user').style.display=MODO_NUVEM?'block':'none';
+  document.getElementById('modal-user').value='';
+  document.getElementById('modal-sub').textContent=MODO_NUVEM?'Informe o usuário e a senha para editar os dados desta seção.':'Insira a senha para editar os dados desta seção.';
   const nomes={qualificacao:'Qualificação',rh:'Recursos Humanos',comunicacao:'Comunicação',atendimento:'Atendimento e Serviços',financeiro:'Financeiro'};
   document.getElementById('modal-area-label').textContent=nomes[moduloAtivo];
   document.getElementById('modal-pwd').value='';
   document.getElementById('modal-err').textContent='';
   document.getElementById('modal-senha').classList.add('open');
-  setTimeout(()=>document.getElementById('modal-pwd').focus(),80);
+  setTimeout(()=>document.getElementById(MODO_NUVEM?'modal-user':'modal-pwd').focus(),80);
 });
 
 function fecharModal(){document.getElementById('modal-senha').classList.remove('open');}
@@ -2263,15 +2272,14 @@ function confirmarSenha(){
   const errEl=document.getElementById('modal-err');
   if(MODO_NUVEM){
     if(!window.Nuvem){errEl.textContent='Conexão com a nuvem indisponível. Verifique a internet e recarregue a página.';return;}
-    if(!pwd){errEl.textContent='Informe a senha.';return;}
+    const nome=document.getElementById('modal-user').value;
+    if(!nome.trim()||!pwd){errEl.textContent='Informe o usuário e a senha.';return;}
     errEl.textContent='Entrando…';
     const credInvalida=e=>['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email','auth/invalid-login-credentials'].includes(e.code);
-    // Tenta o usuário da área; se a senha não for dela, tenta o usuário administrador
-    window.Nuvem.entrar(emailDaArea(pendingArea),pwd)
-      .catch(e=>{if(credInvalida(e)) return window.Nuvem.entrar(emailDaArea('admin'),pwd);throw e;})
+    window.Nuvem.entrar(emailDoUsuario(nome),pwd)
       .then(()=>{fecharModal();abrirPainelEdicao();oferecerMigracao();})
       .catch(e=>{
-        errEl.textContent=credInvalida(e)?'Senha incorreta. Por favor, tente novamente.':e.code==='auth/too-many-requests'?'Muitas tentativas. Aguarde alguns minutos.':'Falha no login: '+e.message;
+        errEl.textContent=credInvalida(e)?'Usuário ou senha incorretos.':e.code==='auth/too-many-requests'?'Muitas tentativas. Aguarde alguns minutos.':'Falha no login: '+e.message;
         document.getElementById('modal-pwd').value='';
         document.getElementById('modal-pwd').focus();
       });

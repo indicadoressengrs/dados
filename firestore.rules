@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Regras de segurança do Painel de Indicadores SENGE-RS.
+// Copie este conteúdo em: Console do Firebase → Firestore Database → Regras → Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // E-mails autorizados a EDITAR o painel (as contas são criadas em Authentication).
+    // Para incluir ou remover alguém, altere a lista e publique as regras novamente.
+    function editor() {
+      return request.auth != null
+        && request.auth.token.email in [
+          'jessica@senge.org.br'
+        ];
+    }
+
+    // Documentos do painel: leitura pública, gravação apenas por editores.
+    match /painel/{doc} {
+      allow read: if doc in ['dados', 'atend', 'fin'];
+      allow write: if editor() && doc in ['dados', 'atend', 'fin'];
+    }
+
+    // Qualquer outro caminho fica bloqueado.
+    match /{caminho=**} {
+      allow read, write: if false;
+    }
+  }
+}

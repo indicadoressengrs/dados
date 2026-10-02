@@ -691,6 +691,17 @@ body {
   border-color: var(--brand-light);
   box-shadow: 0 0 0 3px rgba(45,122,83,.12);
 }
+.sync-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,.75);
+  padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.08);
+  white-space: nowrap;
+}
+.sync-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.sync-status.ok    { color: #6EE7B7; }
+.sync-status.local { color: #FCD34D; }
+.sync-status.erro  { color: #FCA5A5; }
+@media (max-width: 640px) { .sync-status span { display: none; } }
 .modal-err { font-size: 12px; color: var(--err); margin-bottom: 12px; min-height: 16px; }
 .modal-btns { display: flex; gap: 10px; }
 .modal-btn-ok {
@@ -820,7 +831,11 @@ body {
       <span class="brand-label">Painel de Indicadores</span>
     </div>
     <div class="header-right">
+      <span class="sync-status" id="sync-status" title=""><span id="sync-text"></span></span>
       <span class="header-date" id="hdr-date"></span>
+      <button class="icon-btn" id="logout-btn" aria-label="Sair" title="Sair da conta de edição" style="display:none;" onclick="sairDaConta()">
+        <i class="ti ti-logout"></i>
+      </button>
       <button class="icon-btn" id="gear-btn" aria-label="Editar dados" title="Editar dados desta seção">
         <i class="ti ti-settings-2"></i>
       </button>
@@ -844,8 +859,9 @@ body {
 <div class="modal-overlay" id="modal-senha">
   <div class="modal-box">
     <div class="modal-title"><i class="ti ti-lock"></i> Acesso restrito</div>
-    <div class="modal-sub">Insira a senha para editar os dados desta seção.</div>
+    <div class="modal-sub" id="modal-sub">Insira a senha para editar os dados desta seção.</div>
     <div class="modal-area" id="modal-area-label"></div>
+    <input class="modal-input" type="email" id="modal-email" placeholder="E-mail" autocomplete="username" style="display:none;" onkeydown="if(event.key==='Enter')document.getElementById('modal-pwd').focus()">
     <input class="modal-input" type="password" id="modal-pwd" placeholder="Senha" onkeydown="if(event.key==='Enter')confirmarSenha()">
     <div class="modal-err" id="modal-err"></div>
     <div class="modal-btns">
@@ -1000,7 +1016,8 @@ body {
       <div class="edit-panel-title"><i class="ti ti-pencil"></i> Atualizar dados</div>
       <div class="form-grid">
         <div class="form-group"><label>Ano</label><input type="text" id="est-ano" placeholder="Ex: 2026"></div>
-        <div class="form-group"><label>Contratos ativos</label><input type="number" id="est-contratos" min="0" placeholder="0"></div>
+        <div class="form-group"><label>Contratos firmados no ano</label><input type="number" id="est-contratos" min="0" placeholder="deixe vazio para não alterar"></div>
+        <div class="form-group"><label>Contratos ativos hoje</label><input type="number" id="est-ativos" min="0" placeholder="deixe vazio para não alterar"></div>
         <div class="form-group"><label>Encerrando em breve</label><input type="number" id="est-finalizando" min="0" placeholder="0"></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -1197,7 +1214,7 @@ body {
     <div class="page-header">
       <div>
         <div class="page-title">Turnover — 2026</div>
-        <div class="page-sub">Taxa mensal de turnover com classificação de desempenho</div>
+        <div class="page-sub">Taxa mensal = ((Admissões + Demissões) ÷ 2) ÷ Nº de funcionários, com classificação de desempenho</div>
       </div>
     </div>
     <div id="edit-rh-turn" class="edit-panel">
@@ -1390,7 +1407,7 @@ body {
     <div class="page-header">
       <div>
         <div class="page-title">Satisfação dos Associados — NPS</div>
-        <div class="page-sub">Índice de satisfação via RD Station · Meta: 80% · Janeiro–Junho de 2026</div>
+        <div class="page-sub">Pesquisa via RD Station · NPS = % promotores (9–10) − % detratores (0–6) · Satisfação (notas 7–10) com meta de 80%</div>
       </div>
     </div>
     <div id="edit-atend-nps" class="edit-panel">
@@ -1398,8 +1415,8 @@ body {
       <div class="form-grid">
         <div class="form-group"><label>Mês</label><select id="nps-mes"><option>Janeiro</option><option>Fevereiro</option><option>Março</option><option>Abril</option><option>Maio</option><option>Junho</option><option>Julho</option><option>Agosto</option><option>Setembro</option><option>Outubro</option><option>Novembro</option><option>Dezembro</option></select></div>
         <div class="form-group"><label>Total de respondentes</label><input type="number" id="nps-total" min="0" placeholder="0"></div>
-        <div class="form-group"><label>NPS 7–10 (promotores e neutros)</label><input type="number" id="nps-positivos" min="0" placeholder="0"></div>
-        <div class="form-group"><label>Nota 10 — Promotores</label><input type="number" id="nps-nota10" min="0" placeholder="0"></div>
+        <div class="form-group"><label>Promotores (notas 9 e 10)</label><input type="number" id="nps-promotores" min="0" placeholder="0"></div>
+        <div class="form-group"><label>Detratores (notas 0 a 6)</label><input type="number" id="nps-detratores" min="0" placeholder="0"></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn-save" onclick="salvarNPS()"><i class="ti ti-check"></i> Salvar</button>
@@ -1409,7 +1426,7 @@ body {
     <div class="kpi-grid" id="nps-kpis"></div>
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><span class="card-title"><i class="ti ti-chart-line"></i> Evolução do NPS (7–10)</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-chart-line"></i> Evolução do NPS e da satisfação</span></div>
         <div class="chart-wrap" style="height:240px;"><canvas id="npsChart"></canvas></div>
       </div>
       <div class="card">
@@ -1418,7 +1435,7 @@ body {
       </div>
     </div>
     <div class="grid-1"><div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-table"></i> Detalhamento mensal Jan–Jun 2026</span></div>
+      <div class="card-header"><span class="card-title"><i class="ti ti-table"></i> Detalhamento mensal 2026</span></div>
       <div style="overflow-x:auto;"><table class="data-table" id="nps-table"></table></div>
     </div></div>
   </div>
@@ -1562,7 +1579,41 @@ body {
 
 </main><!-- /main -->
 
+<!-- Configuração do Firebase (preencha conforme o README) -->
+<script src="firebase-config.js"></script>
 <script>
+
+// ============================================================
+// ARMAZENAMENTO — NUVEM (Firebase) OU LOCAL
+// ============================================================
+// Com o Firebase configurado, os dados ficam no Firestore e são vistos por todos.
+// Sem configuração, o painel funciona como antes: dados apenas neste navegador.
+const MODO_NUVEM=!!(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey);
+const CHAVES_LOCAIS={dados:'sengers_v2',atend:'sengers_atend_v1',fin:'sengers_fin_v1'};
+function chaveArmazenamento(tipo){return MODO_NUVEM?'sengers_nuvem_'+tipo:CHAVES_LOCAIS[tipo];}
+function clonar(o){return JSON.parse(JSON.stringify(o));}
+function lerLocal(chave){try{const s=localStorage.getItem(chave);return s?JSON.parse(s):null;}catch(e){return null;}}
+function gravarLocal(chave,obj){try{localStorage.setItem(chave,JSON.stringify(obj));}catch(e){}}
+// Grava o documento localmente (cache) e, no modo nuvem, envia apenas o campo alterado
+function salvarDocumento(tipo,obj,campo){
+  gravarLocal(chaveArmazenamento(tipo),obj);
+  if(!MODO_NUVEM) return;
+  if(window.Nuvem&&campo) window.Nuvem.salvar(tipo,campo,obj[campo]);
+  else alert('Sem conexão com a nuvem: a alteração ficou salva apenas neste navegador.');
+}
+function erroAoSalvarNuvem(e){
+  const msg=e&&e.code==='permission-denied'
+    ?'Sua conta não tem permissão para editar o painel. Solicite a inclusão do seu e-mail nas regras do Firebase.'
+    :'Não foi possível salvar na nuvem: '+((e&&e.message)||e);
+  alert(msg);
+}
+function definirStatusSync(estado,detalhe){
+  const el=document.getElementById('sync-status');if(!el) return;
+  const textos={local:'Modo local',conectando:'Conectando…',ok:'Sincronizado',erro:'Sem conexão'};
+  const dicas={local:'Os dados estão salvos apenas neste navegador. Configure o Firebase para compartilhá-los.',conectando:'Conectando ao banco de dados compartilhado…',ok:'Dados compartilhados e atualizados em tempo real.',erro:'Falha na conexão com o banco de dados'+(detalhe?': '+detalhe:'')+'. Exibindo a última cópia disponível.'};
+  el.className='sync-status '+estado;el.title=dicas[estado]||'';
+  document.getElementById('sync-text').textContent=textos[estado]||estado;
+}
 
 // ============================================================
 // ATENDIMENTO — DADOS E RENDER
@@ -1588,17 +1639,18 @@ const ATEND_DEFAULT = {
   ]
 };
 
-function loadAtend(){
-  try{
-    const s=localStorage.getItem('sengers_atend_v1');
-    if(s){ const d=JSON.parse(s);
-      if(!d.nps||d.nps.length===0) d.nps=JSON.parse(JSON.stringify(ATEND_DEFAULT.nps));
-      if(!d.rd||d.rd.length===0) d.rd=JSON.parse(JSON.stringify(ATEND_DEFAULT.rd));
-      return d; }
-  }catch(e){}
-  return JSON.parse(JSON.stringify(ATEND_DEFAULT));
+function normalizarAtend(d){
+  d=Object.assign(clonar(ATEND_DEFAULT),d||{});
+  if(!d.nps||d.nps.length===0) d.nps=clonar(ATEND_DEFAULT.nps);
+  if(!d.rd||d.rd.length===0) d.rd=clonar(ATEND_DEFAULT.rd);
+  d.nps.forEach(r=>{
+    if(r.detratores==null&&r.positivos!=null&&r.total!=null) r.detratores=r.total-r.positivos;
+    if(r.promotores===undefined) r.promotores=null;
+  });
+  return d;
 }
-function saveAtend(d){try{localStorage.setItem('sengers_atend_v1',JSON.stringify(d));}catch(e){}}
+function loadAtend(){return normalizarAtend(lerLocal(chaveArmazenamento('atend')));}
+function saveAtend(d,campo){salvarDocumento('atend',d,campo);}
 let ATEND=loadAtend();
 
 // --- SÓCIOS ---
@@ -1637,7 +1689,8 @@ function salvarSocios(){
   const idx=ATEND.socios.findIndex(r=>r.mes===mes);
   const rec={mes,total,conveniados:conv,efetivos:ef};
   if(idx>=0) ATEND.socios[idx]=rec; else ATEND.socios.push(rec);
-  saveAtend(ATEND);renderSocios();saveMsg('as-msg');
+  ordenarMeses(ATEND.socios);
+  saveAtend(ATEND,'socios');renderSocios();saveMsg('as-msg');
 }
 
 // --- SENGE SAÚDE ---
@@ -1676,44 +1729,69 @@ function salvarSaude(){
   const idx=ATEND.saude.findIndex(r=>r.mes===mes);
   const rec={mes,unimed,outros};
   if(idx>=0) ATEND.saude[idx]=rec; else ATEND.saude.push(rec);
-  saveAtend(ATEND);renderSaude();saveMsg('sau-msg');
+  ordenarMeses(ATEND.saude);
+  saveAtend(ATEND,'saude');renderSaude();saveMsg('sau-msg');
 }
 
 // --- NPS ---
+// NPS oficial = % promotores (9–10) − % detratores (0–6), de −100 a +100.
+// Satisfação = % de notas 7–10 (meta de 80%), mantida para comparação histórica.
+const NPS_META_SATISF=0.80;
+function npsDe(r){return (r.total>0&&r.promotores!=null&&r.detratores!=null)?Math.round((r.promotores-r.detratores)/r.total*1000)/10:null;}
+function satisfDe(r){return (r.total>0&&r.detratores!=null)?(r.total-r.detratores)/r.total:null;}
+function zonaNPS(n){
+  if(n===null) return '<span class="badge" style="color:var(--tx-3);">Sem promotores</span>';
+  if(n>=75) return '<span class="badge badge-v">Excelência</span>';
+  if(n>=50) return '<span class="badge badge-v">Qualidade</span>';
+  if(n>=0)  return '<span class="badge badge-a">Aperfeiçoamento</span>';
+  return '<span class="badge badge-r">Crítica</span>';
+}
 function renderNPS(){
   const rows=ATEND.nps||[];
-  const meta=0.80;
-  const last=rows.filter(r=>r.total>0).at(-1)||{};
-  const lastPct=last.total?last.positivos/last.total:null;
-  const avgPct=rows.filter(r=>r.total>0).reduce((a,r,_,arr)=>a+(r.positivos/r.total)/arr.length,0)||0;
+  const comDados=rows.filter(r=>r.total>0);
+  const comNPS=comDados.filter(r=>npsDe(r)!==null);
+  const lastN=comNPS.at(-1)||{};
+  const lastS=comDados.at(-1)||{};
+  const nAtual=comNPS.length?npsDe(lastN):null;
+  const sAtual=comDados.length?satisfDe(lastS):null;
   const totalResp=rows.reduce((a,r)=>a+(r.total||0),0);
-  const aboveMeta=rows.filter(r=>r.total>0&&r.positivos/r.total>=meta).length;
+  const acimaMeta=comDados.filter(r=>satisfDe(r)>=NPS_META_SATISF).length;
   document.getElementById('nps-kpis').innerHTML=
-    kpi('','Último NPS registrado',lastPct!==null?(lastPct*100).toFixed(1)+'%':'—',`meta: ${(meta*100).toFixed(0)}% · ${last.mes||'—'}`)+
-    kpi('kc-m','Média Jan–Jun 2026',(avgPct*100).toFixed(1)+'%','6 meses')+
-    kpi('kc-b','Total de respondentes',totalResp.toLocaleString('pt-BR'),'acumulado')+
-    kpi('kc-a','Meses acima da meta',aboveMeta,'de '+rows.filter(r=>r.total>0).length+' com dados');
+    kpi('','NPS — último mês',nAtual!==null?(nAtual>0?'+':'')+nAtual.toFixed(1):'—',nAtual!==null?lastN.mes+' · '+zonaNPS(nAtual):'informe promotores e detratores')+
+    kpi('kc-m','Satisfação (notas 7–10)',sAtual!==null?(sAtual*100).toFixed(1)+'%':'—',`meta: ${(NPS_META_SATISF*100).toFixed(0)}% · ${lastS.mes||'—'}`)+
+    kpi('kc-b','Total de respondentes',totalResp.toLocaleString('pt-BR'),'acumulado '+periodoMeses(comDados))+
+    kpi('kc-a','Meses com satisfação na meta',acimaMeta,'de '+comDados.length+' com dados');
   const labels=rows.map(r=>r.mes.substring(0,3));
-  const pcts=rows.map(r=>r.total>0?parseFloat((r.positivos/r.total*100).toFixed(1)):null);
-  const metaLine=rows.map(()=>80);
+  const nps=rows.map(r=>npsDe(r));
+  const sat=rows.map(r=>{const v=satisfDe(r);return v===null?null:parseFloat((v*100).toFixed(1));});
   mkChart('npsChart',{type:'line',data:{labels,datasets:[
-    {label:'NPS 7–10 (%)',data:pcts,borderColor:'#1A4731',backgroundColor:'rgba(26,71,49,.08)',tension:.35,fill:true,pointBackgroundColor:pcts.map(v=>v===null?'transparent':v>=80?'#059669':'#F37021'),pointRadius:5,spanGaps:false},
-    {label:'Meta 80%',data:metaLine,borderColor:'#F37021',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:0}
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,boxHeight:8,font:{size:11}}}},scales:{y:{grid:{color:'#e8ede4'},min:60,max:100,ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}}});
+    {label:'NPS',data:nps,borderColor:'#1A4731',backgroundColor:'rgba(26,71,49,.08)',tension:.35,fill:false,pointBackgroundColor:'#1A4731',pointRadius:5,spanGaps:false},
+    {label:'Satisfação 7–10 (%)',data:sat,borderColor:'#2563EB',tension:.35,fill:false,pointBackgroundColor:sat.map(v=>v===null?'transparent':v>=80?'#059669':'#F37021'),pointRadius:4,spanGaps:false},
+    {label:'Meta satisfação 80%',data:rows.map(()=>80),borderColor:'#F37021',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:0}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,boxHeight:8,font:{size:11}}}},scales:{y:{grid:{color:'#e8ede4'},suggestedMin:0,max:100},x:{grid:{display:false}}}}});
+  const maxT=Math.max(...rows.map(x=>x.total||0));
   mkChart('npsChartTotal',{type:'bar',data:{labels,datasets:[
-    {label:'Total de respondentes',data:rows.map(r=>r.total||0),backgroundColor:rows.map(r=>r.total===Math.max(...rows.map(x=>x.total||0))?'#F37021':'#2d7a53'),borderRadius:4,borderSkipped:false}
+    {label:'Total de respondentes',data:rows.map(r=>r.total||0),backgroundColor:rows.map(r=>r.total===maxT?'#F37021':'#2d7a53'),borderRadius:4,borderSkipped:false}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'#e8ede4'},beginAtZero:true},x:{grid:{display:false}}}}});
-  document.getElementById('nps-table').innerHTML=`<thead><tr><th>Mês</th><th>Respondentes</th><th>NPS 7–10</th><th>% NPS</th><th>Nota 10</th><th>Status</th></tr></thead><tbody>${rows.map(r=>{const pct=r.total>0?r.positivos/r.total:0;const ok=pct>=meta;return `<tr><td>${r.mes}</td><td>${r.total||0}</td><td>${r.positivos||0}</td><td><strong style="color:${ok?'var(--ok)':'var(--err)'}">${(pct*100).toFixed(1)}%</strong></td><td>${r.nota10||0}</td><td><span class="badge ${ok?'badge-v':'badge-r'}">${ok?'✓ Meta':'✗ Abaixo'}</span></td></tr>`;}).join('')}</tbody>`;
+  const fmt=v=>v==null?'—':v.toLocaleString('pt-BR');
+  document.getElementById('nps-table').innerHTML=`<thead><tr><th>Mês</th><th>Respondentes</th><th>Promotores (9–10)</th><th>Detratores (0–6)</th><th>NPS</th><th>Zona</th><th>Satisfação 7–10</th></tr></thead><tbody>${rows.map(r=>{
+    const n=npsDe(r),sv=satisfDe(r),ok=sv!==null&&sv>=NPS_META_SATISF;
+    return `<tr><td>${r.mes}</td><td>${fmt(r.total)}</td><td>${fmt(r.promotores)}</td><td>${fmt(r.detratores)}</td><td><strong>${n===null?'—':(n>0?'+':'')+n.toFixed(1)}</strong></td><td>${zonaNPS(n)}</td><td><strong style="color:${ok?'var(--ok)':'var(--err)'}">${sv===null?'—':(sv*100).toFixed(1)+'%'}</strong></td></tr>`;
+  }).join('')}</tbody>`;
 }
 function salvarNPS(){
   const mes=document.getElementById('nps-mes').value;
   const total=parseInt(document.getElementById('nps-total').value)||0;
-  const pos=parseInt(document.getElementById('nps-positivos').value)||0;
-  const n10=parseInt(document.getElementById('nps-nota10').value)||0;
+  const prom=parseInt(document.getElementById('nps-promotores').value)||0;
+  const detr=parseInt(document.getElementById('nps-detratores').value)||0;
+  if(prom+detr>total){alert('A soma de promotores e detratores não pode ser maior que o total de respondentes.');return;}
   const idx=ATEND.nps.findIndex(r=>r.mes===mes);
-  const rec={mes,total,positivos:pos,nota10:n10};
+  const ant=idx>=0?ATEND.nps[idx]:{};
+  // "positivos" (notas 7–10) é mantido para compatibilidade com os registros anteriores
+  const rec={mes,total,promotores:prom,detratores:detr,positivos:total-detr,nota10:ant.nota10??null};
   if(idx>=0) ATEND.nps[idx]=rec; else ATEND.nps.push(rec);
-  saveAtend(ATEND);renderNPS();saveMsg('nps-msg');
+  ordenarMeses(ATEND.nps);
+  saveAtend(ATEND,'nps');renderNPS();saveMsg('nps-msg');
 }
 
 
@@ -1756,14 +1834,9 @@ const FIN_DEFAULT = {
   ]
 };
 
-function loadFin(){
-  try{
-    const s=localStorage.getItem('sengers_fin_v1');
-    if(s) return JSON.parse(s);
-  }catch(e){}
-  return JSON.parse(JSON.stringify(FIN_DEFAULT));
-}
-function saveFin(d){try{localStorage.setItem('sengers_fin_v1',JSON.stringify(d));}catch(e){}}
+function normalizarFin(d){return Object.assign(clonar(FIN_DEFAULT),d||{});}
+function loadFin(){return normalizarFin(lerLocal(chaveArmazenamento('fin')));}
+function saveFin(d,campo){salvarDocumento('fin',d,campo);}
 let FIN=loadFin();
 let finAno='2026', exclAno='2026';
 
@@ -1818,7 +1891,8 @@ function salvarArrecadacao(){
   if(!FIN.arrecadacao[ano]) FIN.arrecadacao[ano]=[];
   const idx=FIN.arrecadacao[ano].findIndex(r=>r.mes===mes);
   if(idx>=0) FIN.arrecadacao[ano][idx]={mes,caixa,pgto}; else FIN.arrecadacao[ano].push({mes,caixa,pgto});
-  saveFin(FIN); finAno=ano; renderArrecadacao(); saveMsg('fa-msg');
+  ordenarMeses(FIN.arrecadacao[ano]);
+  saveFin(FIN,'arrecadacao'); finAno=ano; renderArrecadacao(); saveMsg('fa-msg');
 }
 
 // --- EXCLUSÕES ---
@@ -1844,7 +1918,7 @@ function renderExclusoes(){
     scales:{y:{grid:{color:'#e8ede4'},beginAtZero:true,ticks:{stepSize:5}},x:{grid:{display:false}}}}});
   // Tabela comparativa por ano
   const allAnos=Object.keys(FIN.exclusoes).sort();
-  const totPorAno=allAnos.map(a=>({ano:a,total:FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0),media:Math.round(FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0)/12*10)/10}));
+  const totPorAno=allAnos.map(a=>({ano:a,total:FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0),media:FIN.exclusoes[a].length?Math.round(FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0)/FIN.exclusoes[a].length*10)/10:0}));
   document.getElementById('excl-table').innerHTML=`<thead><tr><th>Ano</th><th>Total de exclusões</th><th>Média mensal</th></tr></thead><tbody>${totPorAno.map(r=>`<tr style="${r.ano===exclAno?'font-weight:600;background:var(--surface-2);':''}"><td>${r.ano}</td><td>${r.total}</td><td>${r.media}</td></tr>`).join('')}</tbody>`;
 }
 function salvarExclusoes(){
@@ -1854,7 +1928,8 @@ function salvarExclusoes(){
   if(!FIN.exclusoes[ano]) FIN.exclusoes[ano]=[];
   const idx=FIN.exclusoes[ano].findIndex(r=>r.mes===mes);
   if(idx>=0) FIN.exclusoes[ano][idx]={mes,exc}; else FIN.exclusoes[ano].push({mes,exc});
-  saveFin(FIN); exclAno=ano; renderExclusoes(); saveMsg('fe-msg');
+  ordenarMeses(FIN.exclusoes[ano]);
+  saveFin(FIN,'exclusoes'); exclAno=ano; renderExclusoes(); saveMsg('fe-msg');
 }
 
 // --- ATENDIMENTO RD ---
@@ -1915,9 +1990,10 @@ function salvarRD(){
   const mes=document.getElementById('rd-mes').value;
   const retEl=document.getElementById('rd-retencao');
   const rec={mes,bot:parseInt(document.getElementById('rd-bot').value)||0,retencao:retEl?parseFloat(retEl.value)||0:0,humanos:parseInt(document.getElementById('rd-humanos').value)||0,satisf:parseFloat(document.getElementById('rd-satisf').value)||0,media:parseFloat(document.getElementById('rd-media').value)||0,tma:document.getElementById('rd-tma').value.trim(),tmeD:document.getElementById('rd-tme-d').value.trim(),tmeF:document.getElementById('rd-tme-f').value.trim()};
-  const idx=FIN.rd.findIndex(r=>r.mes===mes);
+  const idx=ATEND.rd.findIndex(r=>r.mes===mes);
   if(idx>=0) ATEND.rd[idx]=rec; else ATEND.rd.push(rec);
-  saveAtend(ATEND); renderRD(); saveMsg('rd-msg');
+  ordenarMeses(ATEND.rd);
+  saveAtend(ATEND,'rd'); renderRD(); saveMsg('rd-msg');
 }
 
 
@@ -1992,7 +2068,6 @@ function setupModuleNav(mod) {
 // ============================================================
 // CONFIG
 // ============================================================
-const STORE_KEY = 'sengers_v2';
 const SENHAS = { qualificacao:'senge2026', rh:'rh2026', comunicacao:'com2026', atendimento:'atend2026', financeiro:'fin2026' };
 
 const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -2048,23 +2123,16 @@ const DEFAULT = {
   ]
 };
 
-function loadData(){
-  try{
-    const s=localStorage.getItem(STORE_KEY);
-    if(s){
-      const d=JSON.parse(s);
-      // Garantir que todas as keys existem (migração de versões antigas)
-      if(!d.rh) d.rh=JSON.parse(JSON.stringify(DEFAULT.rh));
-      if(!d.comunicacao) d.comunicacao=[];
-      if(!d.cursos) d.cursos=JSON.parse(JSON.stringify(DEFAULT.cursos));
-      if(Array.isArray(d.estagios)) d.estagios=JSON.parse(JSON.stringify(DEFAULT.estagios));
-      if(!d.conexoes) d.conexoes=[];
-      return d;
-    }
-  }catch(e){}
-  return JSON.parse(JSON.stringify(DEFAULT));
+function normalizarDados(d){
+  // Garante que todas as chaves existem (migração de versões antigas)
+  d=Object.assign(clonar(DEFAULT),d||{});
+  if(Array.isArray(d.estagios)) d.estagios=clonar(DEFAULT.estagios);
+  // Recalcula o turnover com a fórmula vigente (registros antigos usavam demissões ÷ funcionários)
+  (d.rh.turnover||[]).forEach(r=>{r.taxa=taxaTurnover(r.adm,r.dem,r.func);});
+  return d;
 }
-function saveData(d){try{localStorage.setItem(STORE_KEY,JSON.stringify(d));}catch(e){}}
+function loadData(){return normalizarDados(lerLocal(chaveArmazenamento('dados')));}
+function saveData(d,campo){salvarDocumento('dados',d,campo);}
 let DATA=loadData();
 
 // ============================================================
@@ -2091,6 +2159,8 @@ function abrirModulo(mod){
   document.getElementById('portal').style.display='none';
   document.querySelectorAll('.modulo').forEach(m=>m.classList.remove('active'));
   document.getElementById('mod-'+mod).classList.add('active');
+  const secoes=document.querySelectorAll('#mod-'+mod+' .section');
+  secoes.forEach((sec,i)=>sec.classList.toggle('active',i===0));
   document.getElementById('breadcrumb').classList.add('visible');
   const labels={qualificacao:'Qualificação',rh:'Recursos Humanos',comunicacao:'Comunicação',atendimento:'Atendimento e Serviços',financeiro:'Financeiro'};
   document.getElementById('bc-label').textContent=labels[mod]||mod;
@@ -2099,7 +2169,7 @@ function abrirModulo(mod){
   setupModuleNav(mod);
   if(mod==='qualificacao') renderLocacoes();
   if(mod==='rh') renderRhQuadro();
-  if(mod==='com') renderComunicacao();
+  if(mod==='comunicacao') renderComunicacao();
   if(mod==='atendimento') renderSocios();
   if(mod==='financeiro') renderArrecadacao();
 }
@@ -2167,21 +2237,38 @@ document.getElementById('gear-btn').addEventListener('click',()=>{
   };
   pendingEdit = editMap[moduloAtivo]();
   pendingArea = moduloAtivo;
+  // No modo nuvem, quem já está logado abre o painel de edição diretamente
+  if(MODO_NUVEM && window.Nuvem && window.Nuvem.usuario()){abrirPainelEdicao();return;}
+  document.getElementById('modal-email').style.display=MODO_NUVEM?'block':'none';
+  document.getElementById('modal-sub').textContent=MODO_NUVEM?'Entre com o e-mail e a senha da sua conta de edição.':'Insira a senha para editar os dados desta seção.';
   const nomes={qualificacao:'Qualificação',rh:'Recursos Humanos',comunicacao:'Comunicação',atendimento:'Atendimento e Serviços',financeiro:'Financeiro'};
   document.getElementById('modal-area-label').textContent=nomes[moduloAtivo];
   document.getElementById('modal-pwd').value='';
   document.getElementById('modal-err').textContent='';
   document.getElementById('modal-senha').classList.add('open');
-  setTimeout(()=>document.getElementById('modal-pwd').focus(),80);
+  setTimeout(()=>document.getElementById(MODO_NUVEM?'modal-email':'modal-pwd').focus(),80);
 });
 
 function fecharModal(){document.getElementById('modal-senha').classList.remove('open');}
+function abrirPainelEdicao(){const p=document.getElementById(pendingEdit);if(p) p.classList.toggle('open');}
 function confirmarSenha(){
   const pwd=document.getElementById('modal-pwd').value;
+  const errEl=document.getElementById('modal-err');
+  if(MODO_NUVEM){
+    const email=document.getElementById('modal-email').value.trim();
+    if(!window.Nuvem){errEl.textContent='Conexão com a nuvem indisponível. Verifique a internet e recarregue a página.';return;}
+    if(!email||!pwd){errEl.textContent='Informe o e-mail e a senha.';return;}
+    errEl.textContent='Entrando…';
+    window.Nuvem.entrar(email,pwd).then(()=>{fecharModal();abrirPainelEdicao();oferecerMigracao();}).catch(e=>{
+      const cred=['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email'].includes(e.code);
+      errEl.textContent=cred?'E-mail ou senha incorretos.':e.code==='auth/too-many-requests'?'Muitas tentativas. Aguarde alguns minutos.':'Falha no login: '+e.message;
+      document.getElementById('modal-pwd').value='';
+    });
+    return;
+  }
   if(pwd===SENHAS[pendingArea]){
     fecharModal();
-    const p=document.getElementById(pendingEdit);
-    if(p) p.classList.toggle('open');
+    abrirPainelEdicao();
   } else {
     document.getElementById('modal-err').textContent='Senha incorreta. Por favor, tente novamente.';
     document.getElementById('modal-pwd').value='';
@@ -2197,6 +2284,11 @@ function rankList(items,nameKey,valKey,color){
   const max=Math.max(...items.map(i=>i[valKey]),1);
   return items.map(i=>`<div class="rank-item"><div class="rank-name" style="min-width:100px;font-size:12px;">${i[nameKey]}</div><div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.round(i[valKey]/max*100)}%;background:${color||'linear-gradient(90deg,var(--verde),var(--verde-light))'};">${i[valKey]}</div></div></div>`).join('');
 }
+// Mantém os registros mensais em ordem de calendário, para que "último mês" e gráficos fiquem corretos
+const ORDEM_MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function ordenarMeses(arr){if(Array.isArray(arr)) arr.sort((a,b)=>ORDEM_MESES.indexOf(a.mes)-ORDEM_MESES.indexOf(b.mes));return arr;}
+// Gera o rótulo do período a partir dos meses registrados (ex.: "Jan–Mai")
+function periodoMeses(rows){const ms=(rows||[]).map(r=>r.mes).filter(Boolean);if(!ms.length) return '—';const a=ms[0].substring(0,3),b=ms[ms.length-1].substring(0,3);return a===b?a:a+'–'+b;}
 function saveMsg(id){document.getElementById(id).textContent='✓ Salvo!';setTimeout(()=>document.getElementById(id).textContent='',2500);}
 
 // ============================================================
@@ -2230,7 +2322,7 @@ function salvarLocacao(){
   DATA.locacoes[ano].meses.sort((a,b)=>mOrder.indexOf(a.mes)-mOrder.indexOf(b.mes));
   if(salaRaw!=='') DATA.locacoes[ano].sala=parseInt(salaRaw)||0;
   if(audRaw!=='') DATA.locacoes[ano].auditorio=parseInt(audRaw)||0;
-  saveData(DATA);locYear=ano;renderLocacoes();saveMsg('loc-msg');
+  saveData(DATA,'locacoes');locYear=ano;renderLocacoes();saveMsg('loc-msg');
 }
 
 // ============================================================
@@ -2255,7 +2347,7 @@ function salvarCurso(){
   if(!ano){alert('Informe o ano');return;}
   if(!DATA.cursos.anos[ano]) DATA.cursos.anos[ano]={porArea:[],top:[]};
   Object.assign(DATA.cursos.anos[ano],{total:parseInt(document.getElementById('cur-total').value)||0,inscritos:parseInt(document.getElementById('cur-inscritos').value)||0,receita:parseFloat(document.getElementById('cur-receita').value)||0,cancelados:parseInt(document.getElementById('cur-cancelados').value)||0});
-  saveData(DATA);curAno=ano;renderCursos();saveMsg('cur-msg');
+  saveData(DATA,'cursos');curAno=ano;renderCursos();saveMsg('cur-msg');
 }
 
 // ============================================================
@@ -2263,7 +2355,7 @@ function salvarCurso(){
 // ============================================================
 function renderEstagios(){
   const at=DATA.estagios.ativos||{},hist=DATA.estagios.historico||[],enc=DATA.estagios.encerrados||{};
-  document.getElementById('est-kpis').innerHTML=kpi('','Contratos ativos',at.total||0,'Mai/2026')+kpi('kc-m','Encerrando em breve',at.finalizando||0,'com vencimento próximo')+kpi('kc-a','Encerrados',enc.total||0,'histórico total')+kpi('kc-w','Efetivados',enc.efetivados||0,'ao longo do tempo');
+  document.getElementById('est-kpis').innerHTML=kpi('','Contratos ativos',at.total||0,'atualmente')+kpi('kc-m','Encerrando em breve',at.finalizando||0,'com vencimento próximo')+kpi('kc-a','Encerrados',enc.total||0,'histórico total')+kpi('kc-w','Efetivados',enc.efetivados||0,'ao longo do tempo');
   mkChart('estChart',{type:'bar',data:{labels:hist.map(h=>h.ano),datasets:[{label:'Contratos',data:hist.map(h=>h.contratos),backgroundColor:hist.map((_,i)=>i===hist.length-1?'#f5a800':'#1a8a60'),borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'#e8ede4'},beginAtZero:true},x:{grid:{display:false}}}}});
   const pc=at.porCurso||[];const maxC=Math.max(...pc.map(c=>c.qtde),1);
   document.getElementById('est-table').innerHTML=`<thead><tr><th>Curso</th><th>Ativos</th><th></th></tr></thead><tbody>${pc.map(c=>`<tr><td>${c.curso}</td><td><strong>${c.qtde}</strong></td><td style="width:100px;"><div style="height:8px;background:var(--cinza-border);border-radius:4px;overflow:hidden;"><div style="height:100%;width:${Math.round(c.qtde/maxC*100)}%;background:var(--verde-light);border-radius:4px;"></div></div></td></tr>`).join('')}</tbody>`;
@@ -2271,14 +2363,18 @@ function renderEstagios(){
   document.getElementById('est-emp-list').innerHTML=rankList(at.porEmpresa||[],'empresa','qtde');
 }
 function salvarEstagio(){
+  const v=id=>{const t=document.getElementById(id).value.trim();return t===''?null:parseInt(t)||0;};
   const ano=document.getElementById('est-ano').value.trim();
-  if(!ano){alert('Informe o ano');return;}
-  const contratos=parseInt(document.getElementById('est-contratos').value)||0;
-  const fin=parseInt(document.getElementById('est-finalizando').value)||0;
-  const idx=DATA.estagios.historico.findIndex(r=>r.ano===ano);
-  if(idx>=0) DATA.estagios.historico[idx].contratos=contratos; else DATA.estagios.historico.push({ano,contratos});
-  DATA.estagios.ativos.total=contratos;DATA.estagios.ativos.finalizando=fin;
-  saveData(DATA);renderEstagios();saveMsg('est-msg');
+  const contratos=v('est-contratos'),ativos=v('est-ativos'),fin=v('est-finalizando');
+  if(contratos!==null){
+    if(!ano){alert('Informe o ano dos contratos firmados');return;}
+    const idx=DATA.estagios.historico.findIndex(r=>r.ano===ano);
+    if(idx>=0) DATA.estagios.historico[idx].contratos=contratos; else DATA.estagios.historico.push({ano,contratos});
+    DATA.estagios.historico.sort((a,b)=>a.ano.localeCompare(b.ano));
+  }
+  if(ativos!==null) DATA.estagios.ativos.total=ativos;
+  if(fin!==null) DATA.estagios.ativos.finalizando=fin;
+  saveData(DATA,'estagios');renderEstagios();saveMsg('est-msg');
 }
 
 // ============================================================
@@ -2304,7 +2400,7 @@ function salvarConexoes(){
   const rec={periodo,usuarios:parseInt(document.getElementById('con-usuarios').value)||0,vagasTotal:parseInt(document.getElementById('con-vagas-total').value)||0,vagasAtivas:parseInt(document.getElementById('con-vagas-ativas').value)||0,prestadores:pRaw===''?null:parseInt(pRaw)||0};
   const idx=DATA.conexoes.findIndex(r=>r.periodo===periodo);
   if(idx>=0) DATA.conexoes[idx]=rec; else DATA.conexoes.push(rec);
-  saveData(DATA);renderConexoes();saveMsg('con-msg');
+  saveData(DATA,'conexoes');renderConexoes();saveMsg('con-msg');
 }
 
 // ============================================================
@@ -2329,7 +2425,7 @@ function salvarRhQuadro(){
   if(!area){alert('Informe a área');return;}
   const idx=DATA.rh.porArea.findIndex(a=>a.area.toLowerCase()===area.toLowerCase());
   if(idx>=0) DATA.rh.porArea[idx].qtd=qtd; else DATA.rh.porArea.push({area,qtd});
-  saveData(DATA);renderRhQuadro();saveMsg('rh-q-msg');
+  saveData(DATA,'rh');renderRhQuadro();saveMsg('rh-q-msg');
 }
 
 // ============================================================
@@ -2338,7 +2434,7 @@ function salvarRhQuadro(){
 function renderRhMov(){
   const rows=DATA.rh.movimentacao||[];
   const totAdm=rows.reduce((a,r)=>a+(r.adm||0),0),totDem=rows.reduce((a,r)=>a+(r.dem||0),0);
-  document.getElementById('rh-mov-kpis').innerHTML=kpi('kc-b','Total de admissões',totAdm,'2026')+kpi('kc-p','Total de demissões',totDem,'2026')+kpi('kc-w','Saldo (adm. − dem.)',totAdm-totDem>0?'+'+( totAdm-totDem):totAdm-totDem,'jan–mai/2026')+kpi('','Funcionários — quadro atual',DATA.rh.turnover[DATA.rh.turnover.length-1]?.func||34,'quadro atual');
+  document.getElementById('rh-mov-kpis').innerHTML=kpi('kc-b','Total de admissões',totAdm,'2026')+kpi('kc-p','Total de demissões',totDem,'2026')+kpi('kc-w','Saldo (adm. − dem.)',totAdm-totDem>0?'+'+( totAdm-totDem):totAdm-totDem,periodoMeses(rows)+'/2026')+kpi('','Funcionários — quadro atual',((DATA.rh.turnover||[]).filter(r=>r.func).at(-1)||{}).func??'—','quadro atual');
   mkChart('rhChartMov',{type:'bar',data:{labels:rows.map(r=>r.mes.substring(0,3)),datasets:[{label:'Admissões',data:rows.map(r=>r.adm||0),backgroundColor:'#1a8a60',borderRadius:4},{label:'Demissões',data:rows.map(r=>r.dem||0),backgroundColor:'#e57373',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,pointStyleWidth:8,boxHeight:8,font:{size:12}}}},scales:{y:{grid:{color:'#e8ede4'},ticks:{stepSize:1}},x:{grid:{display:false}}}}});
   document.getElementById('rh-mov-table').innerHTML=`<thead><tr><th>Mês</th><th>Admissões</th><th>Demissões</th><th>Saldo</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.mes}</td><td>${r.adm||0}</td><td>${r.dem||0}</td><td><strong style="color:${(r.adm||0)-(r.dem||0)>=0?'var(--verde-light)':'#c62828'}">${(r.adm||0)-(r.dem||0)>=0?'+':''}${(r.adm||0)-(r.dem||0)}</strong></td></tr>`).join('')}</tbody>`;
 }
@@ -2346,10 +2442,11 @@ function salvarRhMov(){
   const mes=document.getElementById('rh-mov-mes').value,adm=parseInt(document.getElementById('rh-admissoes').value)||0,dem=parseInt(document.getElementById('rh-demissoes').value)||0;
   const idx=DATA.rh.movimentacao.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.movimentacao[idx]={mes,adm,dem}; else DATA.rh.movimentacao.push({mes,adm,dem});
+  ordenarMeses(DATA.rh.movimentacao);
   // Sincronizar com turnover se o mês já existir lá
   const ti=DATA.rh.turnover.findIndex(r=>r.mes===mes);
-  if(ti>=0){DATA.rh.turnover[ti].adm=adm;DATA.rh.turnover[ti].dem=dem;const f=DATA.rh.turnover[ti].func;DATA.rh.turnover[ti].taxa=f>0?dem/f:0;}
-  saveData(DATA);renderRhMov();saveMsg('rh-mov-msg');
+  if(ti>=0){DATA.rh.turnover[ti].adm=adm;DATA.rh.turnover[ti].dem=dem;DATA.rh.turnover[ti].taxa=taxaTurnover(adm,dem,DATA.rh.turnover[ti].func);}
+  saveData(DATA,'rh');renderRhMov();saveMsg('rh-mov-msg');
 }
 
 // ============================================================
@@ -2370,29 +2467,34 @@ function salvarRhTrei(){
   const efRaw=document.getElementById('rh-eficacia').value.trim();const eficacia=efRaw===''?null:parseFloat(efRaw);
   const idx=DATA.rh.treinamentos.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.treinamentos[idx]={mes,horas,eficacia}; else DATA.rh.treinamentos.push({mes,horas,eficacia});
-  saveData(DATA);renderRhTrei();saveMsg('rh-trei-msg');
+  ordenarMeses(DATA.rh.treinamentos);
+  saveData(DATA,'rh');renderRhTrei();saveMsg('rh-trei-msg');
 }
 
 // ============================================================
 // RH — TURNOVER
 // ============================================================
+// Turnover = ((admissões + demissões) ÷ 2) ÷ nº de funcionários
+function taxaTurnover(adm,dem,func){return func>0?((adm||0)+(dem||0))/2/func:null;}
 function tvClass(t){if(t===null) return '—';if(t<=0.05) return `<span class="badge badge-v">${(t*100).toFixed(2)}%</span>`;if(t<=0.10) return `<span class="badge badge-a">${(t*100).toFixed(2)}%</span>`;return `<span class="badge badge-r">${(t*100).toFixed(2)}%</span>`;}
 function renderRhTurnover(){
-  const rows=DATA.rh.turnover||[];const last=rows.find(r=>r.taxa!=null)||{};
+  const rows=DATA.rh.turnover||[];const last=rows.filter(r=>r.taxa!=null).at(-1)||{};
+  const funcAtual=(rows.filter(r=>r.func).at(-1)||{}).func;
   const avgTax=rows.filter(r=>r.taxa!=null).reduce((a,r,_,arr)=>a+r.taxa/arr.length,0);
-  document.getElementById('rh-turn-kpis').innerHTML=kpi('kc-b','Último turnover registrado',last.taxa!=null?(last.taxa*100).toFixed(2)+'%':'—',last.mes||'—')+kpi('kc-w','Média 2026',(avgTax*100).toFixed(2)+'%','jan–mai')+kpi('kc-m','Funcionários — quadro atual',last.func||34,'quadro')+kpi('kc-a','Total de demissões em 2026',rows.reduce((a,r)=>a+(r.dem||0),0),'2026');
+  document.getElementById('rh-turn-kpis').innerHTML=kpi('kc-b','Último turnover registrado',last.taxa!=null?(last.taxa*100).toFixed(2)+'%':'—',last.mes||'—')+kpi('kc-w','Média 2026',(avgTax*100).toFixed(2)+'%',periodoMeses(rows.filter(r=>r.taxa!=null)))+kpi('kc-m','Funcionários — quadro atual',funcAtual??'—','quadro')+kpi('kc-a','Total de demissões em 2026',rows.reduce((a,r)=>a+(r.dem||0),0),'2026');
   mkChart('rhChartTurnover',{type:'line',data:{labels:rows.map(r=>r.mes.substring(0,3)),datasets:[{label:'Turnover',data:rows.map(r=>r.taxa!=null?parseFloat((r.taxa*100).toFixed(2)):null),borderColor:'#1565c0',backgroundColor:'rgba(21,101,192,0.08)',tension:0.3,fill:true,pointBackgroundColor:rows.map(r=>r.taxa===null?'transparent':r.taxa<=0.05?'#1a8a60':r.taxa<=0.10?'#f5a800':'#c62828'),pointRadius:5,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:v=>`Turnover: ${v.raw}%`}}},scales:{y:{grid:{color:'#e8ede4'},ticks:{callback:v=>v+'%'},suggestedMin:0,suggestedMax:15},x:{grid:{display:false}}}}});
   document.getElementById('rh-turn-table').innerHTML=`<thead><tr><th>Mês</th><th>Admissões</th><th>Demissões</th><th>Funcionários</th><th>Taxa</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.mes}</td><td>${r.adm??'—'}</td><td>${r.dem??'—'}</td><td>${r.func??'—'}</td><td>${tvClass(r.taxa)}</td></tr>`).join('')}</tbody>`;
 }
 function salvarRhTurn(){
   const mes=document.getElementById('rh-turn-mes').value,adm=parseInt(document.getElementById('rh-turn-adm').value)||0,dem=parseInt(document.getElementById('rh-turn-dem').value)||0,func=parseInt(document.getElementById('rh-turn-func').value)||0;
-  const taxa=func>0?dem/func:0; // fórmula: demissões/total funcionários
+  const taxa=taxaTurnover(adm,dem,func);
   const idx=DATA.rh.turnover.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.turnover[idx]={mes,adm,dem,func,taxa}; else DATA.rh.turnover.push({mes,adm,dem,func,taxa});
+  ordenarMeses(DATA.rh.turnover);
   // Sincronizar com movimentação se o mês já existir lá
   const mi=DATA.rh.movimentacao.findIndex(r=>r.mes===mes);
   if(mi>=0){DATA.rh.movimentacao[mi].adm=adm;DATA.rh.movimentacao[mi].dem=dem;}
-  saveData(DATA);renderRhTurnover();saveMsg('rh-turn-msg');
+  saveData(DATA,'rh');renderRhTurnover();saveMsg('rh-turn-msg');
 }
 
 // ============================================================
@@ -2440,7 +2542,8 @@ function salvarCom(){
   const rec={mes,artigos:gi('com-artigos'),newsletter:g('com-newsletter'),tv:gi('com-tv'),linkedin:g('com-linkedin'),facebook:g('com-facebook'),instagram:g('com-instagram')};
   const idx=DATA.comunicacao.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.comunicacao[idx]=rec; else DATA.comunicacao.push(rec);
-  saveData(DATA);renderComunicacao();saveMsg('com-msg');
+  ordenarMeses(DATA.comunicacao);
+  saveData(DATA,'comunicacao');renderComunicacao();saveMsg('com-msg');
 }
 
 // ============================================================
@@ -2448,6 +2551,101 @@ function salvarCom(){
 // ============================================================
 // Garante que o portal aparece primeiro
 document.getElementById('portal').style.display='block';
+
+// ============================================================
+// SINCRONIZAÇÃO COM A NUVEM
+// ============================================================
+const RENDER_SECAO={
+  'qual-locacoes':renderLocacoes,'qual-cursos':renderCursos,'qual-estagios':renderEstagios,'qual-conexoes':renderConexoes,
+  'rh-quadro':renderRhQuadro,'rh-movimentacao':renderRhMov,'rh-treinamento':renderRhTrei,'rh-turnover':renderRhTurnover,
+  'atend-socios':renderSocios,'atend-saude':renderSaude,'atend-nps':renderNPS,
+  'fin-arrecadacao':renderArrecadacao,'fin-exclusoes':renderExclusoes,'fin-rd':renderRD
+};
+function rerenderAtivo(){
+  if(!moduloAtivo) return;
+  if(moduloAtivo==='comunicacao'){renderComunicacao();return;}
+  const sec=document.querySelector('#mod-'+moduloAtivo+' .section.active');
+  const fn=sec&&RENDER_SECAO[sec.id];
+  if(fn) fn();
+}
+const NORMALIZAR={dados:normalizarDados,atend:normalizarAtend,fin:normalizarFin};
+// Chamada pelo módulo do Firebase sempre que um documento muda na nuvem
+function aplicarDadosRemotos(tipo,obj){
+  const d=NORMALIZAR[tipo](obj);
+  if(tipo==='dados') DATA=d; else if(tipo==='atend') ATEND=d; else if(tipo==='fin') FIN=d;
+  gravarLocal(chaveArmazenamento(tipo),d);
+  rerenderAtivo();
+}
+function atualizarLogin(usuario){
+  const b=document.getElementById('logout-btn');
+  b.style.display=usuario?'flex':'none';
+  b.title=usuario?'Sair ('+usuario.email+')':'Sair';
+}
+function sairDaConta(){
+  if(!window.Nuvem) return;
+  document.querySelectorAll('.edit-panel.open').forEach(p=>p.classList.remove('open'));
+  window.Nuvem.sair();
+}
+// Na primeira vez em que alguém entra, oferece enviar os dados digitados antes da nuvem
+function oferecerMigracao(){
+  const FLAG='sengers_migracao_feita';
+  if(lerLocal(FLAG)) return;
+  const tipos=Object.keys(CHAVES_LOCAIS).filter(t=>lerLocal(CHAVES_LOCAIS[t]));
+  if(!tipos.length){gravarLocal(FLAG,true);return;}
+  const ok=confirm('Este navegador possui dados digitados antes da sincronização em nuvem.\n\n'+
+    'Deseja enviá-los agora para que todos possam vê-los?\n\n'+
+    'Atenção: os dados atuais da nuvem serão SUBSTITUÍDOS pelos deste navegador. '+
+    'Faça isso apenas no computador que tem as informações mais completas e atualizadas.');
+  if(!ok){gravarLocal(FLAG,true);return;}
+  Promise.all(tipos.map(t=>window.Nuvem.substituir(t,NORMALIZAR[t](lerLocal(CHAVES_LOCAIS[t])))))
+    .then(()=>{gravarLocal(FLAG,true);alert('Dados enviados com sucesso. Agora todos visualizam as mesmas informações.');})
+    .catch(erroAoSalvarNuvem);
+}
+if(MODO_NUVEM){
+  definirStatusSync('conectando');
+  // Se o SDK não carregar (internet, bloqueio de rede), avisa em vez de ficar "conectando" indefinidamente
+  setTimeout(()=>{if(!window.Nuvem) definirStatusSync('erro','SDK do Firebase não carregou');},12000);
+} else {
+  definirStatusSync('local');
+}
+</script>
+
+<!-- Firebase: leitura em tempo real e gravação autenticada -->
+<script type="module">
+const cfg=window.FIREBASE_CONFIG;
+if(cfg&&cfg.apiKey){
+  try{
+    const V='10.12.2';
+    const {initializeApp}=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+    const {getFirestore,doc,onSnapshot,updateDoc,setDoc}=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    const {getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
+    const app=initializeApp(cfg);
+    const db=getFirestore(app);
+    const auth=getAuth(app);
+    const COLECAO='painel';
+    const limpar=v=>JSON.parse(JSON.stringify(v??null)); // o Firestore não aceita undefined
+    let usuario=null;
+    window.Nuvem={
+      usuario:()=>usuario,
+      entrar:(email,senha)=>signInWithEmailAndPassword(auth,email,senha),
+      sair:()=>signOut(auth),
+      // Atualiza só o campo alterado (ex.: "rh"), para não sobrescrever edições de outras áreas
+      salvar:(tipo,campo,valor)=>{
+        const ref=doc(db,COLECAO,tipo);
+        return updateDoc(ref,{[campo]:limpar(valor)})
+          .catch(e=>{if(e.code==='not-found') return setDoc(ref,{[campo]:limpar(valor)},{merge:true});throw e;})
+          .catch(erroAoSalvarNuvem);
+      },
+      substituir:(tipo,obj)=>setDoc(doc(db,COLECAO,tipo),limpar(obj))
+    };
+    onAuthStateChanged(auth,u=>{usuario=u;atualizarLogin(u);});
+    ['dados','atend','fin'].forEach(tipo=>onSnapshot(doc(db,COLECAO,tipo),
+      snap=>{aplicarDadosRemotos(tipo,snap.exists()?snap.data():null);definirStatusSync('ok');},
+      err=>definirStatusSync('erro',err.message)));
+  }catch(e){
+    console.error(e);definirStatusSync('erro',e.message);
+  }
+}
 
 
 

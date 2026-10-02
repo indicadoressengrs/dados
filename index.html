@@ -691,6 +691,17 @@ body {
   border-color: var(--brand-light);
   box-shadow: 0 0 0 3px rgba(45,122,83,.12);
 }
+.sync-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; color: rgba(255,255,255,.75);
+  padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.08);
+  white-space: nowrap;
+}
+.sync-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.sync-status.ok    { color: #6EE7B7; }
+.sync-status.local { color: #FCD34D; }
+.sync-status.erro  { color: #FCA5A5; }
+@media (max-width: 640px) { .sync-status span { display: none; } }
 .modal-err { font-size: 12px; color: var(--err); margin-bottom: 12px; min-height: 16px; }
 .modal-btns { display: flex; gap: 10px; }
 .modal-btn-ok {
@@ -820,7 +831,11 @@ body {
       <span class="brand-label">Painel de Indicadores</span>
     </div>
     <div class="header-right">
+      <span class="sync-status" id="sync-status" title=""><span id="sync-text"></span></span>
       <span class="header-date" id="hdr-date"></span>
+      <button class="icon-btn" id="logout-btn" aria-label="Sair" title="Sair da conta de edição" style="display:none;" onclick="sairDaConta()">
+        <i class="ti ti-logout"></i>
+      </button>
       <button class="icon-btn" id="gear-btn" aria-label="Editar dados" title="Editar dados desta seção">
         <i class="ti ti-settings-2"></i>
       </button>
@@ -844,8 +859,9 @@ body {
 <div class="modal-overlay" id="modal-senha">
   <div class="modal-box">
     <div class="modal-title"><i class="ti ti-lock"></i> Acesso restrito</div>
-    <div class="modal-sub">Insira a senha para editar os dados desta seção.</div>
+    <div class="modal-sub" id="modal-sub">Insira a senha para editar os dados desta seção.</div>
     <div class="modal-area" id="modal-area-label"></div>
+    <input class="modal-input" type="email" id="modal-email" placeholder="E-mail" autocomplete="username" style="display:none;" onkeydown="if(event.key==='Enter')document.getElementById('modal-pwd').focus()">
     <input class="modal-input" type="password" id="modal-pwd" placeholder="Senha" onkeydown="if(event.key==='Enter')confirmarSenha()">
     <div class="modal-err" id="modal-err"></div>
     <div class="modal-btns">
@@ -1562,7 +1578,41 @@ body {
 
 </main><!-- /main -->
 
+<!-- Configuração do Firebase (preencha conforme o README) -->
+<script src="firebase-config.js"></script>
 <script>
+
+// ============================================================
+// ARMAZENAMENTO — NUVEM (Firebase) OU LOCAL
+// ============================================================
+// Com o Firebase configurado, os dados ficam no Firestore e são vistos por todos.
+// Sem configuração, o painel funciona como antes: dados apenas neste navegador.
+const MODO_NUVEM=!!(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey);
+const CHAVES_LOCAIS={dados:'sengers_v2',atend:'sengers_atend_v1',fin:'sengers_fin_v1'};
+function chaveArmazenamento(tipo){return MODO_NUVEM?'sengers_nuvem_'+tipo:CHAVES_LOCAIS[tipo];}
+function clonar(o){return JSON.parse(JSON.stringify(o));}
+function lerLocal(chave){try{const s=localStorage.getItem(chave);return s?JSON.parse(s):null;}catch(e){return null;}}
+function gravarLocal(chave,obj){try{localStorage.setItem(chave,JSON.stringify(obj));}catch(e){}}
+// Grava o documento localmente (cache) e, no modo nuvem, envia apenas o campo alterado
+function salvarDocumento(tipo,obj,campo){
+  gravarLocal(chaveArmazenamento(tipo),obj);
+  if(!MODO_NUVEM) return;
+  if(window.Nuvem&&campo) window.Nuvem.salvar(tipo,campo,obj[campo]);
+  else alert('Sem conexão com a nuvem: a alteração ficou salva apenas neste navegador.');
+}
+function erroAoSalvarNuvem(e){
+  const msg=e&&e.code==='permission-denied'
+    ?'Sua conta não tem permissão para editar o painel. Solicite a inclusão do seu e-mail nas regras do Firebase.'
+    :'Não foi possível salvar na nuvem: '+((e&&e.message)||e);
+  alert(msg);
+}
+function definirStatusSync(estado,detalhe){
+  const el=document.getElementById('sync-status');if(!el) return;
+  const textos={local:'Modo local',conectando:'Conectando…',ok:'Sincronizado',erro:'Sem conexão'};
+  const dicas={local:'Os dados estão salvos apenas neste navegador. Configure o Firebase para compartilhá-los.',conectando:'Conectando ao banco de dados compartilhado…',ok:'Dados compartilhados e atualizados em tempo real.',erro:'Falha na conexão com o banco de dados'+(detalhe?': '+detalhe:'')+'. Exibindo a última cópia disponível.'};
+  el.className='sync-status '+estado;el.title=dicas[estado]||'';
+  document.getElementById('sync-text').textContent=textos[estado]||estado;
+}
 
 // ============================================================
 // ATENDIMENTO — DADOS E RENDER
@@ -1588,17 +1638,14 @@ const ATEND_DEFAULT = {
   ]
 };
 
-function loadAtend(){
-  try{
-    const s=localStorage.getItem('sengers_atend_v1');
-    if(s){ const d=JSON.parse(s);
-      if(!d.nps||d.nps.length===0) d.nps=JSON.parse(JSON.stringify(ATEND_DEFAULT.nps));
-      if(!d.rd||d.rd.length===0) d.rd=JSON.parse(JSON.stringify(ATEND_DEFAULT.rd));
-      return d; }
-  }catch(e){}
-  return JSON.parse(JSON.stringify(ATEND_DEFAULT));
+function normalizarAtend(d){
+  d=Object.assign(clonar(ATEND_DEFAULT),d||{});
+  if(!d.nps||d.nps.length===0) d.nps=clonar(ATEND_DEFAULT.nps);
+  if(!d.rd||d.rd.length===0) d.rd=clonar(ATEND_DEFAULT.rd);
+  return d;
 }
-function saveAtend(d){try{localStorage.setItem('sengers_atend_v1',JSON.stringify(d));}catch(e){}}
+function loadAtend(){return normalizarAtend(lerLocal(chaveArmazenamento('atend')));}
+function saveAtend(d,campo){salvarDocumento('atend',d,campo);}
 let ATEND=loadAtend();
 
 // --- SÓCIOS ---
@@ -1638,7 +1685,7 @@ function salvarSocios(){
   const rec={mes,total,conveniados:conv,efetivos:ef};
   if(idx>=0) ATEND.socios[idx]=rec; else ATEND.socios.push(rec);
   ordenarMeses(ATEND.socios);
-  saveAtend(ATEND);renderSocios();saveMsg('as-msg');
+  saveAtend(ATEND,'socios');renderSocios();saveMsg('as-msg');
 }
 
 // --- SENGE SAÚDE ---
@@ -1678,7 +1725,7 @@ function salvarSaude(){
   const rec={mes,unimed,outros};
   if(idx>=0) ATEND.saude[idx]=rec; else ATEND.saude.push(rec);
   ordenarMeses(ATEND.saude);
-  saveAtend(ATEND);renderSaude();saveMsg('sau-msg');
+  saveAtend(ATEND,'saude');renderSaude();saveMsg('sau-msg');
 }
 
 // --- NPS ---
@@ -1716,7 +1763,7 @@ function salvarNPS(){
   const rec={mes,total,positivos:pos,nota10:n10};
   if(idx>=0) ATEND.nps[idx]=rec; else ATEND.nps.push(rec);
   ordenarMeses(ATEND.nps);
-  saveAtend(ATEND);renderNPS();saveMsg('nps-msg');
+  saveAtend(ATEND,'nps');renderNPS();saveMsg('nps-msg');
 }
 
 
@@ -1759,14 +1806,9 @@ const FIN_DEFAULT = {
   ]
 };
 
-function loadFin(){
-  try{
-    const s=localStorage.getItem('sengers_fin_v1');
-    if(s) return JSON.parse(s);
-  }catch(e){}
-  return JSON.parse(JSON.stringify(FIN_DEFAULT));
-}
-function saveFin(d){try{localStorage.setItem('sengers_fin_v1',JSON.stringify(d));}catch(e){}}
+function normalizarFin(d){return Object.assign(clonar(FIN_DEFAULT),d||{});}
+function loadFin(){return normalizarFin(lerLocal(chaveArmazenamento('fin')));}
+function saveFin(d,campo){salvarDocumento('fin',d,campo);}
 let FIN=loadFin();
 let finAno='2026', exclAno='2026';
 
@@ -1822,7 +1864,7 @@ function salvarArrecadacao(){
   const idx=FIN.arrecadacao[ano].findIndex(r=>r.mes===mes);
   if(idx>=0) FIN.arrecadacao[ano][idx]={mes,caixa,pgto}; else FIN.arrecadacao[ano].push({mes,caixa,pgto});
   ordenarMeses(FIN.arrecadacao[ano]);
-  saveFin(FIN); finAno=ano; renderArrecadacao(); saveMsg('fa-msg');
+  saveFin(FIN,'arrecadacao'); finAno=ano; renderArrecadacao(); saveMsg('fa-msg');
 }
 
 // --- EXCLUSÕES ---
@@ -1859,7 +1901,7 @@ function salvarExclusoes(){
   const idx=FIN.exclusoes[ano].findIndex(r=>r.mes===mes);
   if(idx>=0) FIN.exclusoes[ano][idx]={mes,exc}; else FIN.exclusoes[ano].push({mes,exc});
   ordenarMeses(FIN.exclusoes[ano]);
-  saveFin(FIN); exclAno=ano; renderExclusoes(); saveMsg('fe-msg');
+  saveFin(FIN,'exclusoes'); exclAno=ano; renderExclusoes(); saveMsg('fe-msg');
 }
 
 // --- ATENDIMENTO RD ---
@@ -1923,7 +1965,7 @@ function salvarRD(){
   const idx=ATEND.rd.findIndex(r=>r.mes===mes);
   if(idx>=0) ATEND.rd[idx]=rec; else ATEND.rd.push(rec);
   ordenarMeses(ATEND.rd);
-  saveAtend(ATEND); renderRD(); saveMsg('rd-msg');
+  saveAtend(ATEND,'rd'); renderRD(); saveMsg('rd-msg');
 }
 
 
@@ -1998,7 +2040,6 @@ function setupModuleNav(mod) {
 // ============================================================
 // CONFIG
 // ============================================================
-const STORE_KEY = 'sengers_v2';
 const SENHAS = { qualificacao:'senge2026', rh:'rh2026', comunicacao:'com2026', atendimento:'atend2026', financeiro:'fin2026' };
 
 const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
@@ -2054,23 +2095,14 @@ const DEFAULT = {
   ]
 };
 
-function loadData(){
-  try{
-    const s=localStorage.getItem(STORE_KEY);
-    if(s){
-      const d=JSON.parse(s);
-      // Garantir que todas as keys existem (migração de versões antigas)
-      if(!d.rh) d.rh=JSON.parse(JSON.stringify(DEFAULT.rh));
-      if(!d.comunicacao) d.comunicacao=[];
-      if(!d.cursos) d.cursos=JSON.parse(JSON.stringify(DEFAULT.cursos));
-      if(Array.isArray(d.estagios)) d.estagios=JSON.parse(JSON.stringify(DEFAULT.estagios));
-      if(!d.conexoes) d.conexoes=[];
-      return d;
-    }
-  }catch(e){}
-  return JSON.parse(JSON.stringify(DEFAULT));
+function normalizarDados(d){
+  // Garante que todas as chaves existem (migração de versões antigas)
+  d=Object.assign(clonar(DEFAULT),d||{});
+  if(Array.isArray(d.estagios)) d.estagios=clonar(DEFAULT.estagios);
+  return d;
 }
-function saveData(d){try{localStorage.setItem(STORE_KEY,JSON.stringify(d));}catch(e){}}
+function loadData(){return normalizarDados(lerLocal(chaveArmazenamento('dados')));}
+function saveData(d,campo){salvarDocumento('dados',d,campo);}
 let DATA=loadData();
 
 // ============================================================
@@ -2097,6 +2129,8 @@ function abrirModulo(mod){
   document.getElementById('portal').style.display='none';
   document.querySelectorAll('.modulo').forEach(m=>m.classList.remove('active'));
   document.getElementById('mod-'+mod).classList.add('active');
+  const secoes=document.querySelectorAll('#mod-'+mod+' .section');
+  secoes.forEach((sec,i)=>sec.classList.toggle('active',i===0));
   document.getElementById('breadcrumb').classList.add('visible');
   const labels={qualificacao:'Qualificação',rh:'Recursos Humanos',comunicacao:'Comunicação',atendimento:'Atendimento e Serviços',financeiro:'Financeiro'};
   document.getElementById('bc-label').textContent=labels[mod]||mod;
@@ -2173,21 +2207,38 @@ document.getElementById('gear-btn').addEventListener('click',()=>{
   };
   pendingEdit = editMap[moduloAtivo]();
   pendingArea = moduloAtivo;
+  // No modo nuvem, quem já está logado abre o painel de edição diretamente
+  if(MODO_NUVEM && window.Nuvem && window.Nuvem.usuario()){abrirPainelEdicao();return;}
+  document.getElementById('modal-email').style.display=MODO_NUVEM?'block':'none';
+  document.getElementById('modal-sub').textContent=MODO_NUVEM?'Entre com o e-mail e a senha da sua conta de edição.':'Insira a senha para editar os dados desta seção.';
   const nomes={qualificacao:'Qualificação',rh:'Recursos Humanos',comunicacao:'Comunicação',atendimento:'Atendimento e Serviços',financeiro:'Financeiro'};
   document.getElementById('modal-area-label').textContent=nomes[moduloAtivo];
   document.getElementById('modal-pwd').value='';
   document.getElementById('modal-err').textContent='';
   document.getElementById('modal-senha').classList.add('open');
-  setTimeout(()=>document.getElementById('modal-pwd').focus(),80);
+  setTimeout(()=>document.getElementById(MODO_NUVEM?'modal-email':'modal-pwd').focus(),80);
 });
 
 function fecharModal(){document.getElementById('modal-senha').classList.remove('open');}
+function abrirPainelEdicao(){const p=document.getElementById(pendingEdit);if(p) p.classList.toggle('open');}
 function confirmarSenha(){
   const pwd=document.getElementById('modal-pwd').value;
+  const errEl=document.getElementById('modal-err');
+  if(MODO_NUVEM){
+    const email=document.getElementById('modal-email').value.trim();
+    if(!window.Nuvem){errEl.textContent='Conexão com a nuvem indisponível. Verifique a internet e recarregue a página.';return;}
+    if(!email||!pwd){errEl.textContent='Informe o e-mail e a senha.';return;}
+    errEl.textContent='Entrando…';
+    window.Nuvem.entrar(email,pwd).then(()=>{fecharModal();abrirPainelEdicao();oferecerMigracao();}).catch(e=>{
+      const cred=['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email'].includes(e.code);
+      errEl.textContent=cred?'E-mail ou senha incorretos.':e.code==='auth/too-many-requests'?'Muitas tentativas. Aguarde alguns minutos.':'Falha no login: '+e.message;
+      document.getElementById('modal-pwd').value='';
+    });
+    return;
+  }
   if(pwd===SENHAS[pendingArea]){
     fecharModal();
-    const p=document.getElementById(pendingEdit);
-    if(p) p.classList.toggle('open');
+    abrirPainelEdicao();
   } else {
     document.getElementById('modal-err').textContent='Senha incorreta. Por favor, tente novamente.';
     document.getElementById('modal-pwd').value='';
@@ -2241,7 +2292,7 @@ function salvarLocacao(){
   DATA.locacoes[ano].meses.sort((a,b)=>mOrder.indexOf(a.mes)-mOrder.indexOf(b.mes));
   if(salaRaw!=='') DATA.locacoes[ano].sala=parseInt(salaRaw)||0;
   if(audRaw!=='') DATA.locacoes[ano].auditorio=parseInt(audRaw)||0;
-  saveData(DATA);locYear=ano;renderLocacoes();saveMsg('loc-msg');
+  saveData(DATA,'locacoes');locYear=ano;renderLocacoes();saveMsg('loc-msg');
 }
 
 // ============================================================
@@ -2266,7 +2317,7 @@ function salvarCurso(){
   if(!ano){alert('Informe o ano');return;}
   if(!DATA.cursos.anos[ano]) DATA.cursos.anos[ano]={porArea:[],top:[]};
   Object.assign(DATA.cursos.anos[ano],{total:parseInt(document.getElementById('cur-total').value)||0,inscritos:parseInt(document.getElementById('cur-inscritos').value)||0,receita:parseFloat(document.getElementById('cur-receita').value)||0,cancelados:parseInt(document.getElementById('cur-cancelados').value)||0});
-  saveData(DATA);curAno=ano;renderCursos();saveMsg('cur-msg');
+  saveData(DATA,'cursos');curAno=ano;renderCursos();saveMsg('cur-msg');
 }
 
 // ============================================================
@@ -2289,7 +2340,7 @@ function salvarEstagio(){
   const idx=DATA.estagios.historico.findIndex(r=>r.ano===ano);
   if(idx>=0) DATA.estagios.historico[idx].contratos=contratos; else DATA.estagios.historico.push({ano,contratos});
   DATA.estagios.ativos.total=contratos;DATA.estagios.ativos.finalizando=fin;
-  saveData(DATA);renderEstagios();saveMsg('est-msg');
+  saveData(DATA,'estagios');renderEstagios();saveMsg('est-msg');
 }
 
 // ============================================================
@@ -2315,7 +2366,7 @@ function salvarConexoes(){
   const rec={periodo,usuarios:parseInt(document.getElementById('con-usuarios').value)||0,vagasTotal:parseInt(document.getElementById('con-vagas-total').value)||0,vagasAtivas:parseInt(document.getElementById('con-vagas-ativas').value)||0,prestadores:pRaw===''?null:parseInt(pRaw)||0};
   const idx=DATA.conexoes.findIndex(r=>r.periodo===periodo);
   if(idx>=0) DATA.conexoes[idx]=rec; else DATA.conexoes.push(rec);
-  saveData(DATA);renderConexoes();saveMsg('con-msg');
+  saveData(DATA,'conexoes');renderConexoes();saveMsg('con-msg');
 }
 
 // ============================================================
@@ -2340,7 +2391,7 @@ function salvarRhQuadro(){
   if(!area){alert('Informe a área');return;}
   const idx=DATA.rh.porArea.findIndex(a=>a.area.toLowerCase()===area.toLowerCase());
   if(idx>=0) DATA.rh.porArea[idx].qtd=qtd; else DATA.rh.porArea.push({area,qtd});
-  saveData(DATA);renderRhQuadro();saveMsg('rh-q-msg');
+  saveData(DATA,'rh');renderRhQuadro();saveMsg('rh-q-msg');
 }
 
 // ============================================================
@@ -2361,7 +2412,7 @@ function salvarRhMov(){
   // Sincronizar com turnover se o mês já existir lá
   const ti=DATA.rh.turnover.findIndex(r=>r.mes===mes);
   if(ti>=0){DATA.rh.turnover[ti].adm=adm;DATA.rh.turnover[ti].dem=dem;const f=DATA.rh.turnover[ti].func;DATA.rh.turnover[ti].taxa=f>0?dem/f:0;}
-  saveData(DATA);renderRhMov();saveMsg('rh-mov-msg');
+  saveData(DATA,'rh');renderRhMov();saveMsg('rh-mov-msg');
 }
 
 // ============================================================
@@ -2383,7 +2434,7 @@ function salvarRhTrei(){
   const idx=DATA.rh.treinamentos.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.treinamentos[idx]={mes,horas,eficacia}; else DATA.rh.treinamentos.push({mes,horas,eficacia});
   ordenarMeses(DATA.rh.treinamentos);
-  saveData(DATA);renderRhTrei();saveMsg('rh-trei-msg');
+  saveData(DATA,'rh');renderRhTrei();saveMsg('rh-trei-msg');
 }
 
 // ============================================================
@@ -2407,7 +2458,7 @@ function salvarRhTurn(){
   // Sincronizar com movimentação se o mês já existir lá
   const mi=DATA.rh.movimentacao.findIndex(r=>r.mes===mes);
   if(mi>=0){DATA.rh.movimentacao[mi].adm=adm;DATA.rh.movimentacao[mi].dem=dem;}
-  saveData(DATA);renderRhTurnover();saveMsg('rh-turn-msg');
+  saveData(DATA,'rh');renderRhTurnover();saveMsg('rh-turn-msg');
 }
 
 // ============================================================
@@ -2456,7 +2507,7 @@ function salvarCom(){
   const idx=DATA.comunicacao.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.comunicacao[idx]=rec; else DATA.comunicacao.push(rec);
   ordenarMeses(DATA.comunicacao);
-  saveData(DATA);renderComunicacao();saveMsg('com-msg');
+  saveData(DATA,'comunicacao');renderComunicacao();saveMsg('com-msg');
 }
 
 // ============================================================
@@ -2464,6 +2515,101 @@ function salvarCom(){
 // ============================================================
 // Garante que o portal aparece primeiro
 document.getElementById('portal').style.display='block';
+
+// ============================================================
+// SINCRONIZAÇÃO COM A NUVEM
+// ============================================================
+const RENDER_SECAO={
+  'qual-locacoes':renderLocacoes,'qual-cursos':renderCursos,'qual-estagios':renderEstagios,'qual-conexoes':renderConexoes,
+  'rh-quadro':renderRhQuadro,'rh-movimentacao':renderRhMov,'rh-treinamento':renderRhTrei,'rh-turnover':renderRhTurnover,
+  'atend-socios':renderSocios,'atend-saude':renderSaude,'atend-nps':renderNPS,
+  'fin-arrecadacao':renderArrecadacao,'fin-exclusoes':renderExclusoes,'fin-rd':renderRD
+};
+function rerenderAtivo(){
+  if(!moduloAtivo) return;
+  if(moduloAtivo==='comunicacao'){renderComunicacao();return;}
+  const sec=document.querySelector('#mod-'+moduloAtivo+' .section.active');
+  const fn=sec&&RENDER_SECAO[sec.id];
+  if(fn) fn();
+}
+const NORMALIZAR={dados:normalizarDados,atend:normalizarAtend,fin:normalizarFin};
+// Chamada pelo módulo do Firebase sempre que um documento muda na nuvem
+function aplicarDadosRemotos(tipo,obj){
+  const d=NORMALIZAR[tipo](obj);
+  if(tipo==='dados') DATA=d; else if(tipo==='atend') ATEND=d; else if(tipo==='fin') FIN=d;
+  gravarLocal(chaveArmazenamento(tipo),d);
+  rerenderAtivo();
+}
+function atualizarLogin(usuario){
+  const b=document.getElementById('logout-btn');
+  b.style.display=usuario?'flex':'none';
+  b.title=usuario?'Sair ('+usuario.email+')':'Sair';
+}
+function sairDaConta(){
+  if(!window.Nuvem) return;
+  document.querySelectorAll('.edit-panel.open').forEach(p=>p.classList.remove('open'));
+  window.Nuvem.sair();
+}
+// Na primeira vez em que alguém entra, oferece enviar os dados digitados antes da nuvem
+function oferecerMigracao(){
+  const FLAG='sengers_migracao_feita';
+  if(lerLocal(FLAG)) return;
+  const tipos=Object.keys(CHAVES_LOCAIS).filter(t=>lerLocal(CHAVES_LOCAIS[t]));
+  if(!tipos.length){gravarLocal(FLAG,true);return;}
+  const ok=confirm('Este navegador possui dados digitados antes da sincronização em nuvem.\n\n'+
+    'Deseja enviá-los agora para que todos possam vê-los?\n\n'+
+    'Atenção: os dados atuais da nuvem serão SUBSTITUÍDOS pelos deste navegador. '+
+    'Faça isso apenas no computador que tem as informações mais completas e atualizadas.');
+  if(!ok){gravarLocal(FLAG,true);return;}
+  Promise.all(tipos.map(t=>window.Nuvem.substituir(t,NORMALIZAR[t](lerLocal(CHAVES_LOCAIS[t])))))
+    .then(()=>{gravarLocal(FLAG,true);alert('Dados enviados com sucesso. Agora todos visualizam as mesmas informações.');})
+    .catch(erroAoSalvarNuvem);
+}
+if(MODO_NUVEM){
+  definirStatusSync('conectando');
+  // Se o SDK não carregar (internet, bloqueio de rede), avisa em vez de ficar "conectando" indefinidamente
+  setTimeout(()=>{if(!window.Nuvem) definirStatusSync('erro','SDK do Firebase não carregou');},12000);
+} else {
+  definirStatusSync('local');
+}
+</script>
+
+<!-- Firebase: leitura em tempo real e gravação autenticada -->
+<script type="module">
+const cfg=window.FIREBASE_CONFIG;
+if(cfg&&cfg.apiKey){
+  try{
+    const V='10.12.2';
+    const {initializeApp}=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+    const {getFirestore,doc,onSnapshot,updateDoc,setDoc}=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
+    const {getAuth,signInWithEmailAndPassword,signOut,onAuthStateChanged}=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
+    const app=initializeApp(cfg);
+    const db=getFirestore(app);
+    const auth=getAuth(app);
+    const COLECAO='painel';
+    const limpar=v=>JSON.parse(JSON.stringify(v??null)); // o Firestore não aceita undefined
+    let usuario=null;
+    window.Nuvem={
+      usuario:()=>usuario,
+      entrar:(email,senha)=>signInWithEmailAndPassword(auth,email,senha),
+      sair:()=>signOut(auth),
+      // Atualiza só o campo alterado (ex.: "rh"), para não sobrescrever edições de outras áreas
+      salvar:(tipo,campo,valor)=>{
+        const ref=doc(db,COLECAO,tipo);
+        return updateDoc(ref,{[campo]:limpar(valor)})
+          .catch(e=>{if(e.code==='not-found') return setDoc(ref,{[campo]:limpar(valor)},{merge:true});throw e;})
+          .catch(erroAoSalvarNuvem);
+      },
+      substituir:(tipo,obj)=>setDoc(doc(db,COLECAO,tipo),limpar(obj))
+    };
+    onAuthStateChanged(auth,u=>{usuario=u;atualizarLogin(u);});
+    ['dados','atend','fin'].forEach(tipo=>onSnapshot(doc(db,COLECAO,tipo),
+      snap=>{aplicarDadosRemotos(tipo,snap.exists()?snap.data():null);definirStatusSync('ok');},
+      err=>definirStatusSync('erro',err.message)));
+  }catch(e){
+    console.error(e);definirStatusSync('erro',e.message);
+  }
+}
 
 
 

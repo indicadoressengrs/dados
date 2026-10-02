@@ -467,6 +467,14 @@ body {
 }
 .card-title i { font-size: 15px; color: var(--tx-3); }
 .chart-wrap { position: relative; width: 100%; }
+.chart-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 12px;
+  font-size: 12.5px; color: var(--tx-3);
+  background: repeating-linear-gradient(135deg, transparent 0 10px, rgba(0,0,0,.015) 10px 20px);
+  border-radius: var(--r-sm);
+}
 
 /* ══════════════════════════════════════════════════════════
    TABLE
@@ -814,9 +822,25 @@ body {
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .brand-label, .brand-divider { display: none; }
-  .tab-btn span { display: none; }
-  .tab-btn { padding: 0 10px; }
   .portal-grid { grid-template-columns: 1fr; }
+  /* Valores grandes (ex.: R$10.734.481) cabem no card */
+  .kpi-card { padding-left: 16px; padding-right: 12px; }
+  .kpi-value { font-size: clamp(17px, 5.4vw, 26px); overflow-wrap: anywhere; }
+  /* Itens de grid podem encolher; tabelas largas rolam dentro do card */
+  .grid-1 > *, .grid-2 > *, .grid-3 > *, .kpi-grid > * { min-width: 0; }
+  .card { overflow-x: auto; }
+  /* Subnav em duas linhas: caminho em cima, abas embaixo com rolagem lateral */
+  .subnav { height: auto; }
+  .subnav-inner { flex-wrap: wrap; height: auto; }
+  .bc-back, .bc-current { height: 40px; display: flex; align-items: center; }
+  .tab-nav {
+    margin-left: 0; width: 100%; height: 42px;
+    overflow-x: auto; scrollbar-width: none;
+    border-top: 1px solid var(--border-light);
+  }
+  .tab-nav:empty { display: none; }
+  .tab-nav::-webkit-scrollbar { display: none; }
+  .tab-btn { padding: 0 12px; }
 }
 </style>
 </head>
@@ -1690,6 +1714,7 @@ function renderSocios(){
       ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,boxHeight:8,font:{size:11}}}},scales:{y:{grid:{color:'#e8ede4'},ticks:{callback:v=>v.toLocaleString('pt-BR')}},x:{grid:{display:false}}}}});
   }
   if(rows.length===0){
+    graficoVazio('asChartSocios');
     document.getElementById('as-table').innerHTML='<thead><tr><th>Mês</th><th>Total</th><th>Conveniados</th><th>Efetivos</th></tr></thead><tbody><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--tx-3);">Nenhum dado registrado — use a engrenagem para adicionar.</td></tr></tbody>';
     return;
   }
@@ -1731,6 +1756,7 @@ function renderSaude(){
     document.getElementById('sau-donut-info').innerHTML=`<div class="donut-dot"><div class="dot" style="background:#1A4731;"></div>Unimed: ${u.toLocaleString('pt-BR')} (${totalVidas?Math.round(u/totalVidas*100):0}%)</div><div class="donut-dot"><div class="dot" style="background:#F37021;"></div>Outros: ${o.toLocaleString('pt-BR')} (${totalVidas?Math.round(o/totalVidas*100):0}%)</div>`;
   }
   if(rows.length===0){
+    graficoVazio('sauChart');graficoVazio('sauChartPizza');document.getElementById('sau-donut-info').innerHTML='';
     document.getElementById('sau-table').innerHTML='<thead><tr><th>Mês</th><th>Unimed</th><th>Outros</th><th>Total</th></tr></thead><tbody><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--tx-3);">Nenhum dado registrado — use a engrenagem para adicionar.</td></tr></tbody>';
     return;
   }
@@ -2157,7 +2183,22 @@ let locYear=2026, curAno='2026';
 let charts={};
 
 function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
-function mkChart(id,cfg){destroyChart(id);charts[id]=new Chart(document.getElementById(id).getContext('2d'),cfg);return charts[id];}
+function avisoVazio(id,mostrar){
+  const cv=document.getElementById(id);if(!cv) return;
+  const wrap=cv.parentElement;let av=wrap.querySelector('.chart-empty');
+  if(mostrar&&!av){av=document.createElement('div');av.className='chart-empty';av.textContent='Sem dados registrados — use a engrenagem para adicionar.';wrap.appendChild(av);}
+  if(av) av.style.display=mostrar?'flex':'none';
+}
+function graficoVazio(id){destroyChart(id);avisoVazio(id,true);}
+function mkChart(id,cfg){
+  destroyChart(id);
+  const ds=(cfg.data&&cfg.data.datasets)||[];
+  // Ignora linhas de meta (borderDash) ao decidir se há dados reais
+  const reais=ds.filter(d=>!d.borderDash);
+  const vazio=!reais.some(d=>(d.data||[]).some(v=>v!==null&&v!==undefined&&v!==0));
+  avisoVazio(id,vazio);
+  charts[id]=new Chart(document.getElementById(id).getContext('2d'),cfg);return charts[id];
+}
 
 // ============================================================
 // PORTAL

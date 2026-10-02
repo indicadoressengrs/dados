@@ -2,22 +2,53 @@ rules_version = '2';
 
 // Regras de segurança do Painel de Indicadores SENGE-RS.
 // Copie este conteúdo em: Console do Firebase → Firestore Database → Regras → Publicar.
+//
+// Cada área tem um usuário próprio em Authentication, no formato
+// <area>@indicadores.senge.org.br, e só pode alterar os indicadores da sua área.
+// O usuário admin@indicadores.senge.org.br pode alterar tudo.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // E-mails autorizados a EDITAR o painel (as contas são criadas em Authentication).
-    // Para incluir ou remover alguém, altere a lista e publique as regras novamente.
-    function editor() {
+    function usuario(area) {
       return request.auth != null
-        && request.auth.token.email in [
-          'jessica@senge.org.br'
-        ];
+        && request.auth.token.email == area + '@indicadores.senge.org.br';
     }
 
-    // Documentos do painel: leitura pública, gravação apenas por editores.
-    match /painel/{doc} {
-      allow read: if doc in ['dados', 'atend', 'fin'];
-      allow write: if editor() && doc in ['dados', 'atend', 'fin'];
+    function admin() {
+      return usuario('admin');
+    }
+
+    // Verifica se a gravação mexe apenas nos campos permitidos
+    function alteraSo(campos) {
+      return (resource == null && request.resource.data.keys().hasOnly(campos))
+        || (resource != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos));
+    }
+
+    // Qualificação, RH e Comunicação
+    match /painel/dados {
+      allow read: if true;
+      allow create, update: if admin()
+        || (usuario('qualificacao') && alteraSo(['locacoes', 'cursos', 'estagios', 'conexoes']))
+        || (usuario('rh') && alteraSo(['rh']))
+        || (usuario('comunicacao') && alteraSo(['comunicacao']));
+      allow delete: if admin();
+    }
+
+    // Atendimento (Sócios, SENGE Saúde, NPS) e Atendimento RD, que fica no módulo Financeiro
+    match /painel/atend {
+      allow read: if true;
+      allow create, update: if admin()
+        || (usuario('atendimento') && alteraSo(['socios', 'saude', 'nps']))
+        || (usuario('financeiro') && alteraSo(['rd']));
+      allow delete: if admin();
+    }
+
+    // Financeiro (Arrecadação e Exclusões PSAT)
+    match /painel/fin {
+      allow read: if true;
+      allow create, update: if admin()
+        || (usuario('financeiro') && alteraSo(['arrecadacao', 'exclusoes']));
+      allow delete: if admin();
     }
 
     // Qualquer outro caminho fica bloqueado.

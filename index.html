@@ -1418,7 +1418,7 @@ body {
       </div>
     </div>
     <div class="grid-1"><div class="card">
-      <div class="card-header"><span class="card-title"><i class="ti ti-table"></i> Detalhamento mensal Jan–Jun 2026</span></div>
+      <div class="card-header"><span class="card-title"><i class="ti ti-table"></i> Detalhamento mensal 2026</span></div>
       <div style="overflow-x:auto;"><table class="data-table" id="nps-table"></table></div>
     </div></div>
   </div>
@@ -1637,6 +1637,7 @@ function salvarSocios(){
   const idx=ATEND.socios.findIndex(r=>r.mes===mes);
   const rec={mes,total,conveniados:conv,efetivos:ef};
   if(idx>=0) ATEND.socios[idx]=rec; else ATEND.socios.push(rec);
+  ordenarMeses(ATEND.socios);
   saveAtend(ATEND);renderSocios();saveMsg('as-msg');
 }
 
@@ -1676,6 +1677,7 @@ function salvarSaude(){
   const idx=ATEND.saude.findIndex(r=>r.mes===mes);
   const rec={mes,unimed,outros};
   if(idx>=0) ATEND.saude[idx]=rec; else ATEND.saude.push(rec);
+  ordenarMeses(ATEND.saude);
   saveAtend(ATEND);renderSaude();saveMsg('sau-msg');
 }
 
@@ -1690,7 +1692,7 @@ function renderNPS(){
   const aboveMeta=rows.filter(r=>r.total>0&&r.positivos/r.total>=meta).length;
   document.getElementById('nps-kpis').innerHTML=
     kpi('','Último NPS registrado',lastPct!==null?(lastPct*100).toFixed(1)+'%':'—',`meta: ${(meta*100).toFixed(0)}% · ${last.mes||'—'}`)+
-    kpi('kc-m','Média Jan–Jun 2026',(avgPct*100).toFixed(1)+'%','6 meses')+
+    kpi('kc-m','Média '+periodoMeses(rows.filter(r=>r.total>0))+' 2026',(avgPct*100).toFixed(1)+'%',rows.filter(r=>r.total>0).length+' meses')+
     kpi('kc-b','Total de respondentes',totalResp.toLocaleString('pt-BR'),'acumulado')+
     kpi('kc-a','Meses acima da meta',aboveMeta,'de '+rows.filter(r=>r.total>0).length+' com dados');
   const labels=rows.map(r=>r.mes.substring(0,3));
@@ -1713,6 +1715,7 @@ function salvarNPS(){
   const idx=ATEND.nps.findIndex(r=>r.mes===mes);
   const rec={mes,total,positivos:pos,nota10:n10};
   if(idx>=0) ATEND.nps[idx]=rec; else ATEND.nps.push(rec);
+  ordenarMeses(ATEND.nps);
   saveAtend(ATEND);renderNPS();saveMsg('nps-msg');
 }
 
@@ -1818,6 +1821,7 @@ function salvarArrecadacao(){
   if(!FIN.arrecadacao[ano]) FIN.arrecadacao[ano]=[];
   const idx=FIN.arrecadacao[ano].findIndex(r=>r.mes===mes);
   if(idx>=0) FIN.arrecadacao[ano][idx]={mes,caixa,pgto}; else FIN.arrecadacao[ano].push({mes,caixa,pgto});
+  ordenarMeses(FIN.arrecadacao[ano]);
   saveFin(FIN); finAno=ano; renderArrecadacao(); saveMsg('fa-msg');
 }
 
@@ -1844,7 +1848,7 @@ function renderExclusoes(){
     scales:{y:{grid:{color:'#e8ede4'},beginAtZero:true,ticks:{stepSize:5}},x:{grid:{display:false}}}}});
   // Tabela comparativa por ano
   const allAnos=Object.keys(FIN.exclusoes).sort();
-  const totPorAno=allAnos.map(a=>({ano:a,total:FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0),media:Math.round(FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0)/12*10)/10}));
+  const totPorAno=allAnos.map(a=>({ano:a,total:FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0),media:FIN.exclusoes[a].length?Math.round(FIN.exclusoes[a].reduce((s,r)=>s+(r.exc||0),0)/FIN.exclusoes[a].length*10)/10:0}));
   document.getElementById('excl-table').innerHTML=`<thead><tr><th>Ano</th><th>Total de exclusões</th><th>Média mensal</th></tr></thead><tbody>${totPorAno.map(r=>`<tr style="${r.ano===exclAno?'font-weight:600;background:var(--surface-2);':''}"><td>${r.ano}</td><td>${r.total}</td><td>${r.media}</td></tr>`).join('')}</tbody>`;
 }
 function salvarExclusoes(){
@@ -1854,6 +1858,7 @@ function salvarExclusoes(){
   if(!FIN.exclusoes[ano]) FIN.exclusoes[ano]=[];
   const idx=FIN.exclusoes[ano].findIndex(r=>r.mes===mes);
   if(idx>=0) FIN.exclusoes[ano][idx]={mes,exc}; else FIN.exclusoes[ano].push({mes,exc});
+  ordenarMeses(FIN.exclusoes[ano]);
   saveFin(FIN); exclAno=ano; renderExclusoes(); saveMsg('fe-msg');
 }
 
@@ -1915,8 +1920,9 @@ function salvarRD(){
   const mes=document.getElementById('rd-mes').value;
   const retEl=document.getElementById('rd-retencao');
   const rec={mes,bot:parseInt(document.getElementById('rd-bot').value)||0,retencao:retEl?parseFloat(retEl.value)||0:0,humanos:parseInt(document.getElementById('rd-humanos').value)||0,satisf:parseFloat(document.getElementById('rd-satisf').value)||0,media:parseFloat(document.getElementById('rd-media').value)||0,tma:document.getElementById('rd-tma').value.trim(),tmeD:document.getElementById('rd-tme-d').value.trim(),tmeF:document.getElementById('rd-tme-f').value.trim()};
-  const idx=FIN.rd.findIndex(r=>r.mes===mes);
+  const idx=ATEND.rd.findIndex(r=>r.mes===mes);
   if(idx>=0) ATEND.rd[idx]=rec; else ATEND.rd.push(rec);
+  ordenarMeses(ATEND.rd);
   saveAtend(ATEND); renderRD(); saveMsg('rd-msg');
 }
 
@@ -2099,7 +2105,7 @@ function abrirModulo(mod){
   setupModuleNav(mod);
   if(mod==='qualificacao') renderLocacoes();
   if(mod==='rh') renderRhQuadro();
-  if(mod==='com') renderComunicacao();
+  if(mod==='comunicacao') renderComunicacao();
   if(mod==='atendimento') renderSocios();
   if(mod==='financeiro') renderArrecadacao();
 }
@@ -2197,6 +2203,11 @@ function rankList(items,nameKey,valKey,color){
   const max=Math.max(...items.map(i=>i[valKey]),1);
   return items.map(i=>`<div class="rank-item"><div class="rank-name" style="min-width:100px;font-size:12px;">${i[nameKey]}</div><div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.round(i[valKey]/max*100)}%;background:${color||'linear-gradient(90deg,var(--verde),var(--verde-light))'};">${i[valKey]}</div></div></div>`).join('');
 }
+// Mantém os registros mensais em ordem de calendário, para que "último mês" e gráficos fiquem corretos
+const ORDEM_MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function ordenarMeses(arr){if(Array.isArray(arr)) arr.sort((a,b)=>ORDEM_MESES.indexOf(a.mes)-ORDEM_MESES.indexOf(b.mes));return arr;}
+// Gera o rótulo do período a partir dos meses registrados (ex.: "Jan–Mai")
+function periodoMeses(rows){const ms=(rows||[]).map(r=>r.mes).filter(Boolean);if(!ms.length) return '—';const a=ms[0].substring(0,3),b=ms[ms.length-1].substring(0,3);return a===b?a:a+'–'+b;}
 function saveMsg(id){document.getElementById(id).textContent='✓ Salvo!';setTimeout(()=>document.getElementById(id).textContent='',2500);}
 
 // ============================================================
@@ -2263,7 +2274,7 @@ function salvarCurso(){
 // ============================================================
 function renderEstagios(){
   const at=DATA.estagios.ativos||{},hist=DATA.estagios.historico||[],enc=DATA.estagios.encerrados||{};
-  document.getElementById('est-kpis').innerHTML=kpi('','Contratos ativos',at.total||0,'Mai/2026')+kpi('kc-m','Encerrando em breve',at.finalizando||0,'com vencimento próximo')+kpi('kc-a','Encerrados',enc.total||0,'histórico total')+kpi('kc-w','Efetivados',enc.efetivados||0,'ao longo do tempo');
+  document.getElementById('est-kpis').innerHTML=kpi('','Contratos ativos',at.total||0,'atualmente')+kpi('kc-m','Encerrando em breve',at.finalizando||0,'com vencimento próximo')+kpi('kc-a','Encerrados',enc.total||0,'histórico total')+kpi('kc-w','Efetivados',enc.efetivados||0,'ao longo do tempo');
   mkChart('estChart',{type:'bar',data:{labels:hist.map(h=>h.ano),datasets:[{label:'Contratos',data:hist.map(h=>h.contratos),backgroundColor:hist.map((_,i)=>i===hist.length-1?'#f5a800':'#1a8a60'),borderRadius:6,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'#e8ede4'},beginAtZero:true},x:{grid:{display:false}}}}});
   const pc=at.porCurso||[];const maxC=Math.max(...pc.map(c=>c.qtde),1);
   document.getElementById('est-table').innerHTML=`<thead><tr><th>Curso</th><th>Ativos</th><th></th></tr></thead><tbody>${pc.map(c=>`<tr><td>${c.curso}</td><td><strong>${c.qtde}</strong></td><td style="width:100px;"><div style="height:8px;background:var(--cinza-border);border-radius:4px;overflow:hidden;"><div style="height:100%;width:${Math.round(c.qtde/maxC*100)}%;background:var(--verde-light);border-radius:4px;"></div></div></td></tr>`).join('')}</tbody>`;
@@ -2338,7 +2349,7 @@ function salvarRhQuadro(){
 function renderRhMov(){
   const rows=DATA.rh.movimentacao||[];
   const totAdm=rows.reduce((a,r)=>a+(r.adm||0),0),totDem=rows.reduce((a,r)=>a+(r.dem||0),0);
-  document.getElementById('rh-mov-kpis').innerHTML=kpi('kc-b','Total de admissões',totAdm,'2026')+kpi('kc-p','Total de demissões',totDem,'2026')+kpi('kc-w','Saldo (adm. − dem.)',totAdm-totDem>0?'+'+( totAdm-totDem):totAdm-totDem,'jan–mai/2026')+kpi('','Funcionários — quadro atual',DATA.rh.turnover[DATA.rh.turnover.length-1]?.func||34,'quadro atual');
+  document.getElementById('rh-mov-kpis').innerHTML=kpi('kc-b','Total de admissões',totAdm,'2026')+kpi('kc-p','Total de demissões',totDem,'2026')+kpi('kc-w','Saldo (adm. − dem.)',totAdm-totDem>0?'+'+( totAdm-totDem):totAdm-totDem,periodoMeses(rows)+'/2026')+kpi('','Funcionários — quadro atual',((DATA.rh.turnover||[]).filter(r=>r.func).at(-1)||{}).func??'—','quadro atual');
   mkChart('rhChartMov',{type:'bar',data:{labels:rows.map(r=>r.mes.substring(0,3)),datasets:[{label:'Admissões',data:rows.map(r=>r.adm||0),backgroundColor:'#1a8a60',borderRadius:4},{label:'Demissões',data:rows.map(r=>r.dem||0),backgroundColor:'#e57373',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,pointStyleWidth:8,boxHeight:8,font:{size:12}}}},scales:{y:{grid:{color:'#e8ede4'},ticks:{stepSize:1}},x:{grid:{display:false}}}}});
   document.getElementById('rh-mov-table').innerHTML=`<thead><tr><th>Mês</th><th>Admissões</th><th>Demissões</th><th>Saldo</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.mes}</td><td>${r.adm||0}</td><td>${r.dem||0}</td><td><strong style="color:${(r.adm||0)-(r.dem||0)>=0?'var(--verde-light)':'#c62828'}">${(r.adm||0)-(r.dem||0)>=0?'+':''}${(r.adm||0)-(r.dem||0)}</strong></td></tr>`).join('')}</tbody>`;
 }
@@ -2346,6 +2357,7 @@ function salvarRhMov(){
   const mes=document.getElementById('rh-mov-mes').value,adm=parseInt(document.getElementById('rh-admissoes').value)||0,dem=parseInt(document.getElementById('rh-demissoes').value)||0;
   const idx=DATA.rh.movimentacao.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.movimentacao[idx]={mes,adm,dem}; else DATA.rh.movimentacao.push({mes,adm,dem});
+  ordenarMeses(DATA.rh.movimentacao);
   // Sincronizar com turnover se o mês já existir lá
   const ti=DATA.rh.turnover.findIndex(r=>r.mes===mes);
   if(ti>=0){DATA.rh.turnover[ti].adm=adm;DATA.rh.turnover[ti].dem=dem;const f=DATA.rh.turnover[ti].func;DATA.rh.turnover[ti].taxa=f>0?dem/f:0;}
@@ -2370,6 +2382,7 @@ function salvarRhTrei(){
   const efRaw=document.getElementById('rh-eficacia').value.trim();const eficacia=efRaw===''?null:parseFloat(efRaw);
   const idx=DATA.rh.treinamentos.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.treinamentos[idx]={mes,horas,eficacia}; else DATA.rh.treinamentos.push({mes,horas,eficacia});
+  ordenarMeses(DATA.rh.treinamentos);
   saveData(DATA);renderRhTrei();saveMsg('rh-trei-msg');
 }
 
@@ -2378,9 +2391,10 @@ function salvarRhTrei(){
 // ============================================================
 function tvClass(t){if(t===null) return '—';if(t<=0.05) return `<span class="badge badge-v">${(t*100).toFixed(2)}%</span>`;if(t<=0.10) return `<span class="badge badge-a">${(t*100).toFixed(2)}%</span>`;return `<span class="badge badge-r">${(t*100).toFixed(2)}%</span>`;}
 function renderRhTurnover(){
-  const rows=DATA.rh.turnover||[];const last=rows.find(r=>r.taxa!=null)||{};
+  const rows=DATA.rh.turnover||[];const last=rows.filter(r=>r.taxa!=null).at(-1)||{};
+  const funcAtual=(rows.filter(r=>r.func).at(-1)||{}).func;
   const avgTax=rows.filter(r=>r.taxa!=null).reduce((a,r,_,arr)=>a+r.taxa/arr.length,0);
-  document.getElementById('rh-turn-kpis').innerHTML=kpi('kc-b','Último turnover registrado',last.taxa!=null?(last.taxa*100).toFixed(2)+'%':'—',last.mes||'—')+kpi('kc-w','Média 2026',(avgTax*100).toFixed(2)+'%','jan–mai')+kpi('kc-m','Funcionários — quadro atual',last.func||34,'quadro')+kpi('kc-a','Total de demissões em 2026',rows.reduce((a,r)=>a+(r.dem||0),0),'2026');
+  document.getElementById('rh-turn-kpis').innerHTML=kpi('kc-b','Último turnover registrado',last.taxa!=null?(last.taxa*100).toFixed(2)+'%':'—',last.mes||'—')+kpi('kc-w','Média 2026',(avgTax*100).toFixed(2)+'%',periodoMeses(rows.filter(r=>r.taxa!=null)))+kpi('kc-m','Funcionários — quadro atual',funcAtual??'—','quadro')+kpi('kc-a','Total de demissões em 2026',rows.reduce((a,r)=>a+(r.dem||0),0),'2026');
   mkChart('rhChartTurnover',{type:'line',data:{labels:rows.map(r=>r.mes.substring(0,3)),datasets:[{label:'Turnover',data:rows.map(r=>r.taxa!=null?parseFloat((r.taxa*100).toFixed(2)):null),borderColor:'#1565c0',backgroundColor:'rgba(21,101,192,0.08)',tension:0.3,fill:true,pointBackgroundColor:rows.map(r=>r.taxa===null?'transparent':r.taxa<=0.05?'#1a8a60':r.taxa<=0.10?'#f5a800':'#c62828'),pointRadius:5,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:v=>`Turnover: ${v.raw}%`}}},scales:{y:{grid:{color:'#e8ede4'},ticks:{callback:v=>v+'%'},suggestedMin:0,suggestedMax:15},x:{grid:{display:false}}}}});
   document.getElementById('rh-turn-table').innerHTML=`<thead><tr><th>Mês</th><th>Admissões</th><th>Demissões</th><th>Funcionários</th><th>Taxa</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.mes}</td><td>${r.adm??'—'}</td><td>${r.dem??'—'}</td><td>${r.func??'—'}</td><td>${tvClass(r.taxa)}</td></tr>`).join('')}</tbody>`;
 }
@@ -2389,6 +2403,7 @@ function salvarRhTurn(){
   const taxa=func>0?dem/func:0; // fórmula: demissões/total funcionários
   const idx=DATA.rh.turnover.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.turnover[idx]={mes,adm,dem,func,taxa}; else DATA.rh.turnover.push({mes,adm,dem,func,taxa});
+  ordenarMeses(DATA.rh.turnover);
   // Sincronizar com movimentação se o mês já existir lá
   const mi=DATA.rh.movimentacao.findIndex(r=>r.mes===mes);
   if(mi>=0){DATA.rh.movimentacao[mi].adm=adm;DATA.rh.movimentacao[mi].dem=dem;}
@@ -2440,6 +2455,7 @@ function salvarCom(){
   const rec={mes,artigos:gi('com-artigos'),newsletter:g('com-newsletter'),tv:gi('com-tv'),linkedin:g('com-linkedin'),facebook:g('com-facebook'),instagram:g('com-instagram')};
   const idx=DATA.comunicacao.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.comunicacao[idx]=rec; else DATA.comunicacao.push(rec);
+  ordenarMeses(DATA.comunicacao);
   saveData(DATA);renderComunicacao();saveMsg('com-msg');
 }
 

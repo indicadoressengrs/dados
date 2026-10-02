@@ -1016,7 +1016,8 @@ body {
       <div class="edit-panel-title"><i class="ti ti-pencil"></i> Atualizar dados</div>
       <div class="form-grid">
         <div class="form-group"><label>Ano</label><input type="text" id="est-ano" placeholder="Ex: 2026"></div>
-        <div class="form-group"><label>Contratos ativos</label><input type="number" id="est-contratos" min="0" placeholder="0"></div>
+        <div class="form-group"><label>Contratos firmados no ano</label><input type="number" id="est-contratos" min="0" placeholder="deixe vazio para não alterar"></div>
+        <div class="form-group"><label>Contratos ativos hoje</label><input type="number" id="est-ativos" min="0" placeholder="deixe vazio para não alterar"></div>
         <div class="form-group"><label>Encerrando em breve</label><input type="number" id="est-finalizando" min="0" placeholder="0"></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -1213,7 +1214,7 @@ body {
     <div class="page-header">
       <div>
         <div class="page-title">Turnover — 2026</div>
-        <div class="page-sub">Taxa mensal de turnover com classificação de desempenho</div>
+        <div class="page-sub">Taxa mensal = ((Admissões + Demissões) ÷ 2) ÷ Nº de funcionários, com classificação de desempenho</div>
       </div>
     </div>
     <div id="edit-rh-turn" class="edit-panel">
@@ -1406,7 +1407,7 @@ body {
     <div class="page-header">
       <div>
         <div class="page-title">Satisfação dos Associados — NPS</div>
-        <div class="page-sub">Índice de satisfação via RD Station · Meta: 80% · Janeiro–Junho de 2026</div>
+        <div class="page-sub">Pesquisa via RD Station · NPS = % promotores (9–10) − % detratores (0–6) · Satisfação (notas 7–10) com meta de 80%</div>
       </div>
     </div>
     <div id="edit-atend-nps" class="edit-panel">
@@ -1414,8 +1415,8 @@ body {
       <div class="form-grid">
         <div class="form-group"><label>Mês</label><select id="nps-mes"><option>Janeiro</option><option>Fevereiro</option><option>Março</option><option>Abril</option><option>Maio</option><option>Junho</option><option>Julho</option><option>Agosto</option><option>Setembro</option><option>Outubro</option><option>Novembro</option><option>Dezembro</option></select></div>
         <div class="form-group"><label>Total de respondentes</label><input type="number" id="nps-total" min="0" placeholder="0"></div>
-        <div class="form-group"><label>NPS 7–10 (promotores e neutros)</label><input type="number" id="nps-positivos" min="0" placeholder="0"></div>
-        <div class="form-group"><label>Nota 10 — Promotores</label><input type="number" id="nps-nota10" min="0" placeholder="0"></div>
+        <div class="form-group"><label>Promotores (notas 9 e 10)</label><input type="number" id="nps-promotores" min="0" placeholder="0"></div>
+        <div class="form-group"><label>Detratores (notas 0 a 6)</label><input type="number" id="nps-detratores" min="0" placeholder="0"></div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="btn-save" onclick="salvarNPS()"><i class="ti ti-check"></i> Salvar</button>
@@ -1425,7 +1426,7 @@ body {
     <div class="kpi-grid" id="nps-kpis"></div>
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><span class="card-title"><i class="ti ti-chart-line"></i> Evolução do NPS (7–10)</span></div>
+        <div class="card-header"><span class="card-title"><i class="ti ti-chart-line"></i> Evolução do NPS e da satisfação</span></div>
         <div class="chart-wrap" style="height:240px;"><canvas id="npsChart"></canvas></div>
       </div>
       <div class="card">
@@ -1642,6 +1643,10 @@ function normalizarAtend(d){
   d=Object.assign(clonar(ATEND_DEFAULT),d||{});
   if(!d.nps||d.nps.length===0) d.nps=clonar(ATEND_DEFAULT.nps);
   if(!d.rd||d.rd.length===0) d.rd=clonar(ATEND_DEFAULT.rd);
+  d.nps.forEach(r=>{
+    if(r.detratores==null&&r.positivos!=null&&r.total!=null) r.detratores=r.total-r.positivos;
+    if(r.promotores===undefined) r.promotores=null;
+  });
   return d;
 }
 function loadAtend(){return normalizarAtend(lerLocal(chaveArmazenamento('atend')));}
@@ -1729,38 +1734,61 @@ function salvarSaude(){
 }
 
 // --- NPS ---
+// NPS oficial = % promotores (9–10) − % detratores (0–6), de −100 a +100.
+// Satisfação = % de notas 7–10 (meta de 80%), mantida para comparação histórica.
+const NPS_META_SATISF=0.80;
+function npsDe(r){return (r.total>0&&r.promotores!=null&&r.detratores!=null)?Math.round((r.promotores-r.detratores)/r.total*1000)/10:null;}
+function satisfDe(r){return (r.total>0&&r.detratores!=null)?(r.total-r.detratores)/r.total:null;}
+function zonaNPS(n){
+  if(n===null) return '<span class="badge" style="color:var(--tx-3);">Sem promotores</span>';
+  if(n>=75) return '<span class="badge badge-v">Excelência</span>';
+  if(n>=50) return '<span class="badge badge-v">Qualidade</span>';
+  if(n>=0)  return '<span class="badge badge-a">Aperfeiçoamento</span>';
+  return '<span class="badge badge-r">Crítica</span>';
+}
 function renderNPS(){
   const rows=ATEND.nps||[];
-  const meta=0.80;
-  const last=rows.filter(r=>r.total>0).at(-1)||{};
-  const lastPct=last.total?last.positivos/last.total:null;
-  const avgPct=rows.filter(r=>r.total>0).reduce((a,r,_,arr)=>a+(r.positivos/r.total)/arr.length,0)||0;
+  const comDados=rows.filter(r=>r.total>0);
+  const comNPS=comDados.filter(r=>npsDe(r)!==null);
+  const lastN=comNPS.at(-1)||{};
+  const lastS=comDados.at(-1)||{};
+  const nAtual=comNPS.length?npsDe(lastN):null;
+  const sAtual=comDados.length?satisfDe(lastS):null;
   const totalResp=rows.reduce((a,r)=>a+(r.total||0),0);
-  const aboveMeta=rows.filter(r=>r.total>0&&r.positivos/r.total>=meta).length;
+  const acimaMeta=comDados.filter(r=>satisfDe(r)>=NPS_META_SATISF).length;
   document.getElementById('nps-kpis').innerHTML=
-    kpi('','Último NPS registrado',lastPct!==null?(lastPct*100).toFixed(1)+'%':'—',`meta: ${(meta*100).toFixed(0)}% · ${last.mes||'—'}`)+
-    kpi('kc-m','Média '+periodoMeses(rows.filter(r=>r.total>0))+' 2026',(avgPct*100).toFixed(1)+'%',rows.filter(r=>r.total>0).length+' meses')+
-    kpi('kc-b','Total de respondentes',totalResp.toLocaleString('pt-BR'),'acumulado')+
-    kpi('kc-a','Meses acima da meta',aboveMeta,'de '+rows.filter(r=>r.total>0).length+' com dados');
+    kpi('','NPS — último mês',nAtual!==null?(nAtual>0?'+':'')+nAtual.toFixed(1):'—',nAtual!==null?lastN.mes+' · '+zonaNPS(nAtual):'informe promotores e detratores')+
+    kpi('kc-m','Satisfação (notas 7–10)',sAtual!==null?(sAtual*100).toFixed(1)+'%':'—',`meta: ${(NPS_META_SATISF*100).toFixed(0)}% · ${lastS.mes||'—'}`)+
+    kpi('kc-b','Total de respondentes',totalResp.toLocaleString('pt-BR'),'acumulado '+periodoMeses(comDados))+
+    kpi('kc-a','Meses com satisfação na meta',acimaMeta,'de '+comDados.length+' com dados');
   const labels=rows.map(r=>r.mes.substring(0,3));
-  const pcts=rows.map(r=>r.total>0?parseFloat((r.positivos/r.total*100).toFixed(1)):null);
-  const metaLine=rows.map(()=>80);
+  const nps=rows.map(r=>npsDe(r));
+  const sat=rows.map(r=>{const v=satisfDe(r);return v===null?null:parseFloat((v*100).toFixed(1));});
   mkChart('npsChart',{type:'line',data:{labels,datasets:[
-    {label:'NPS 7–10 (%)',data:pcts,borderColor:'#1A4731',backgroundColor:'rgba(26,71,49,.08)',tension:.35,fill:true,pointBackgroundColor:pcts.map(v=>v===null?'transparent':v>=80?'#059669':'#F37021'),pointRadius:5,spanGaps:false},
-    {label:'Meta 80%',data:metaLine,borderColor:'#F37021',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:0}
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,boxHeight:8,font:{size:11}}}},scales:{y:{grid:{color:'#e8ede4'},min:60,max:100,ticks:{callback:v=>v+'%'}},x:{grid:{display:false}}}}});
+    {label:'NPS',data:nps,borderColor:'#1A4731',backgroundColor:'rgba(26,71,49,.08)',tension:.35,fill:false,pointBackgroundColor:'#1A4731',pointRadius:5,spanGaps:false},
+    {label:'Satisfação 7–10 (%)',data:sat,borderColor:'#2563EB',tension:.35,fill:false,pointBackgroundColor:sat.map(v=>v===null?'transparent':v>=80?'#059669':'#F37021'),pointRadius:4,spanGaps:false},
+    {label:'Meta satisfação 80%',data:rows.map(()=>80),borderColor:'#F37021',borderDash:[5,4],borderWidth:1.5,pointRadius:0,tension:0}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{usePointStyle:true,boxHeight:8,font:{size:11}}}},scales:{y:{grid:{color:'#e8ede4'},suggestedMin:0,max:100},x:{grid:{display:false}}}}});
+  const maxT=Math.max(...rows.map(x=>x.total||0));
   mkChart('npsChartTotal',{type:'bar',data:{labels,datasets:[
-    {label:'Total de respondentes',data:rows.map(r=>r.total||0),backgroundColor:rows.map(r=>r.total===Math.max(...rows.map(x=>x.total||0))?'#F37021':'#2d7a53'),borderRadius:4,borderSkipped:false}
+    {label:'Total de respondentes',data:rows.map(r=>r.total||0),backgroundColor:rows.map(r=>r.total===maxT?'#F37021':'#2d7a53'),borderRadius:4,borderSkipped:false}
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:'#e8ede4'},beginAtZero:true},x:{grid:{display:false}}}}});
-  document.getElementById('nps-table').innerHTML=`<thead><tr><th>Mês</th><th>Respondentes</th><th>NPS 7–10</th><th>% NPS</th><th>Nota 10</th><th>Status</th></tr></thead><tbody>${rows.map(r=>{const pct=r.total>0?r.positivos/r.total:0;const ok=pct>=meta;return `<tr><td>${r.mes}</td><td>${r.total||0}</td><td>${r.positivos||0}</td><td><strong style="color:${ok?'var(--ok)':'var(--err)'}">${(pct*100).toFixed(1)}%</strong></td><td>${r.nota10||0}</td><td><span class="badge ${ok?'badge-v':'badge-r'}">${ok?'✓ Meta':'✗ Abaixo'}</span></td></tr>`;}).join('')}</tbody>`;
+  const fmt=v=>v==null?'—':v.toLocaleString('pt-BR');
+  document.getElementById('nps-table').innerHTML=`<thead><tr><th>Mês</th><th>Respondentes</th><th>Promotores (9–10)</th><th>Detratores (0–6)</th><th>NPS</th><th>Zona</th><th>Satisfação 7–10</th></tr></thead><tbody>${rows.map(r=>{
+    const n=npsDe(r),sv=satisfDe(r),ok=sv!==null&&sv>=NPS_META_SATISF;
+    return `<tr><td>${r.mes}</td><td>${fmt(r.total)}</td><td>${fmt(r.promotores)}</td><td>${fmt(r.detratores)}</td><td><strong>${n===null?'—':(n>0?'+':'')+n.toFixed(1)}</strong></td><td>${zonaNPS(n)}</td><td><strong style="color:${ok?'var(--ok)':'var(--err)'}">${sv===null?'—':(sv*100).toFixed(1)+'%'}</strong></td></tr>`;
+  }).join('')}</tbody>`;
 }
 function salvarNPS(){
   const mes=document.getElementById('nps-mes').value;
   const total=parseInt(document.getElementById('nps-total').value)||0;
-  const pos=parseInt(document.getElementById('nps-positivos').value)||0;
-  const n10=parseInt(document.getElementById('nps-nota10').value)||0;
+  const prom=parseInt(document.getElementById('nps-promotores').value)||0;
+  const detr=parseInt(document.getElementById('nps-detratores').value)||0;
+  if(prom+detr>total){alert('A soma de promotores e detratores não pode ser maior que o total de respondentes.');return;}
   const idx=ATEND.nps.findIndex(r=>r.mes===mes);
-  const rec={mes,total,positivos:pos,nota10:n10};
+  const ant=idx>=0?ATEND.nps[idx]:{};
+  // "positivos" (notas 7–10) é mantido para compatibilidade com os registros anteriores
+  const rec={mes,total,promotores:prom,detratores:detr,positivos:total-detr,nota10:ant.nota10??null};
   if(idx>=0) ATEND.nps[idx]=rec; else ATEND.nps.push(rec);
   ordenarMeses(ATEND.nps);
   saveAtend(ATEND,'nps');renderNPS();saveMsg('nps-msg');
@@ -2099,6 +2127,8 @@ function normalizarDados(d){
   // Garante que todas as chaves existem (migração de versões antigas)
   d=Object.assign(clonar(DEFAULT),d||{});
   if(Array.isArray(d.estagios)) d.estagios=clonar(DEFAULT.estagios);
+  // Recalcula o turnover com a fórmula vigente (registros antigos usavam demissões ÷ funcionários)
+  (d.rh.turnover||[]).forEach(r=>{r.taxa=taxaTurnover(r.adm,r.dem,r.func);});
   return d;
 }
 function loadData(){return normalizarDados(lerLocal(chaveArmazenamento('dados')));}
@@ -2333,13 +2363,17 @@ function renderEstagios(){
   document.getElementById('est-emp-list').innerHTML=rankList(at.porEmpresa||[],'empresa','qtde');
 }
 function salvarEstagio(){
+  const v=id=>{const t=document.getElementById(id).value.trim();return t===''?null:parseInt(t)||0;};
   const ano=document.getElementById('est-ano').value.trim();
-  if(!ano){alert('Informe o ano');return;}
-  const contratos=parseInt(document.getElementById('est-contratos').value)||0;
-  const fin=parseInt(document.getElementById('est-finalizando').value)||0;
-  const idx=DATA.estagios.historico.findIndex(r=>r.ano===ano);
-  if(idx>=0) DATA.estagios.historico[idx].contratos=contratos; else DATA.estagios.historico.push({ano,contratos});
-  DATA.estagios.ativos.total=contratos;DATA.estagios.ativos.finalizando=fin;
+  const contratos=v('est-contratos'),ativos=v('est-ativos'),fin=v('est-finalizando');
+  if(contratos!==null){
+    if(!ano){alert('Informe o ano dos contratos firmados');return;}
+    const idx=DATA.estagios.historico.findIndex(r=>r.ano===ano);
+    if(idx>=0) DATA.estagios.historico[idx].contratos=contratos; else DATA.estagios.historico.push({ano,contratos});
+    DATA.estagios.historico.sort((a,b)=>a.ano.localeCompare(b.ano));
+  }
+  if(ativos!==null) DATA.estagios.ativos.total=ativos;
+  if(fin!==null) DATA.estagios.ativos.finalizando=fin;
   saveData(DATA,'estagios');renderEstagios();saveMsg('est-msg');
 }
 
@@ -2411,7 +2445,7 @@ function salvarRhMov(){
   ordenarMeses(DATA.rh.movimentacao);
   // Sincronizar com turnover se o mês já existir lá
   const ti=DATA.rh.turnover.findIndex(r=>r.mes===mes);
-  if(ti>=0){DATA.rh.turnover[ti].adm=adm;DATA.rh.turnover[ti].dem=dem;const f=DATA.rh.turnover[ti].func;DATA.rh.turnover[ti].taxa=f>0?dem/f:0;}
+  if(ti>=0){DATA.rh.turnover[ti].adm=adm;DATA.rh.turnover[ti].dem=dem;DATA.rh.turnover[ti].taxa=taxaTurnover(adm,dem,DATA.rh.turnover[ti].func);}
   saveData(DATA,'rh');renderRhMov();saveMsg('rh-mov-msg');
 }
 
@@ -2440,6 +2474,8 @@ function salvarRhTrei(){
 // ============================================================
 // RH — TURNOVER
 // ============================================================
+// Turnover = ((admissões + demissões) ÷ 2) ÷ nº de funcionários
+function taxaTurnover(adm,dem,func){return func>0?((adm||0)+(dem||0))/2/func:null;}
 function tvClass(t){if(t===null) return '—';if(t<=0.05) return `<span class="badge badge-v">${(t*100).toFixed(2)}%</span>`;if(t<=0.10) return `<span class="badge badge-a">${(t*100).toFixed(2)}%</span>`;return `<span class="badge badge-r">${(t*100).toFixed(2)}%</span>`;}
 function renderRhTurnover(){
   const rows=DATA.rh.turnover||[];const last=rows.filter(r=>r.taxa!=null).at(-1)||{};
@@ -2451,7 +2487,7 @@ function renderRhTurnover(){
 }
 function salvarRhTurn(){
   const mes=document.getElementById('rh-turn-mes').value,adm=parseInt(document.getElementById('rh-turn-adm').value)||0,dem=parseInt(document.getElementById('rh-turn-dem').value)||0,func=parseInt(document.getElementById('rh-turn-func').value)||0;
-  const taxa=func>0?dem/func:0; // fórmula: demissões/total funcionários
+  const taxa=taxaTurnover(adm,dem,func);
   const idx=DATA.rh.turnover.findIndex(r=>r.mes===mes);
   if(idx>=0) DATA.rh.turnover[idx]={mes,adm,dem,func,taxa}; else DATA.rh.turnover.push({mes,adm,dem,func,taxa});
   ordenarMeses(DATA.rh.turnover);
